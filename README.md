@@ -33,8 +33,8 @@ git clone https://github.com/handsongice/vibe-rules.git ~/.vibe
 ~/.vibe/scripts/new-project.sh ~/code/my-new-project
 
 # 3. 老项目接入
-cd ~/code/your-old-project
-~/.vibe/scripts/install.sh
+~/.vibe/scripts/install.sh /path/to/your-old-project
+# 或者 cd 到项目目录再跑：cd /path/to/project && ~/.vibe/scripts/install.sh
 # install.sh 会自动处理 AGENTS.md：没有就复制模板，有了就检查是否引用全局库
 ```
 

@@ -1,12 +1,38 @@
 #!/usr/bin/env bash
-# install.sh —— 在项目根目录运行，把 AGENTS.md 链接成各 agent 认识的入口文件
-# 用法：cd /path/to/project && ~/.vibe/scripts/install.sh
+# install.sh —— 在项目根目录建各 agent 的入口 symlink
+#
+# 用法（两种方式任选）：
+#   1. 直接传项目路径：  ~/.vibe/scripts/install.sh /path/to/project
+#   2. cd 到项目目录：  cd /path/to/project && ~/.vibe/scripts/install.sh
+#
 # 幂等：可重复运行。不会覆盖已存在的非符号链接文件。
 
 set -euo pipefail
 
 VIBE_HOME="${VIBE_HOME:-$HOME/.vibe}"
 PROJECT_ROOT="${1:-$(pwd)}"
+
+# 把相对路径转成绝对路径
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
+
+echo "🎯 目标项目目录：$PROJECT_ROOT"
+
+# 安全检查：目录不存在就报错
+if [ ! -d "$PROJECT_ROOT" ]; then
+  echo "❌ 目录不存在：$PROJECT_ROOT"
+  echo "   用法：~/.vibe/scripts/install.sh /path/to/your/project"
+  exit 1
+fi
+
+# 安全检查：看起来不像项目目录（没有 .git 也没有任何代码文件）
+if [ ! -d "$PROJECT_ROOT/.git" ] && [ ! -f "$PROJECT_ROOT/package.json" ] \
+   && [ ! -f "$PROJECT_ROOT/pom.xml" ] && [ ! -f "$PROJECT_ROOT/build.gradle" ] \
+   && [ ! -f "$PROJECT_ROOT/Cargo.toml" ] && [ ! -f "$PROJECT_ROOT/go.mod" ] \
+   && [ ! -f "$PROJECT_ROOT/requirements.txt" ] && [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
+  echo "⚠️  这个目录看起来不像一个项目（没有 .git/package.json/pom.xml 等）"
+  echo "   确认要继续吗？按 Ctrl+C 取消，或按 Enter 继续"
+  read -r
+fi
 
 # —— AGENTS.md 兜底：没有就从模板复制，有了就检查是否引用全局库 ——
 if [ ! -f "$PROJECT_ROOT/AGENTS.md" ]; then
