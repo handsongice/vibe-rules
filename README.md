@@ -136,14 +136,34 @@ vibe-rules/（你 clone 到的任意路径）
 
 把 A 项目沉淀好的内容迁到 B 项目：
 
+**macOS / Linux：**
 ```bash
 /path/to/vibe-rules/scripts/migrate.sh 旧项目slug 新项目slug
+```
+
+**Windows（PowerShell）：**
+```powershell
+pwsh C:\path\to\vibe-rules\scripts\migrate.ps1 旧项目slug 新项目slug
 ```
 
 脚本会：
 - 目标没有的文件：直接复制
 - 目标已有但内容不同：diff 后让你选（覆盖/跳过/查看差异）
 - 不会静默覆盖
+
+## 验证安装
+
+随时检查项目是否正确接入：
+
+**macOS / Linux：**
+```bash
+/path/to/vibe-rules/scripts/verify.sh /path/to/project
+```
+
+**Windows（PowerShell）：**
+```powershell
+pwsh C:\path\to\vibe-rules\scripts\verify.ps1 C:\path\to\project
+```
 ├── templates/AGENTS.md     # 新项目模板
 ├── scripts/
 │   ├── install.sh         # 幂等 symlink 分发
