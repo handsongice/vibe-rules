@@ -5,15 +5,37 @@
 #
 # 例：把 old-app 的沉淀迁移到 new-app
 #   pwsh migrate.ps1 old-app new-app
+#
+# 选项：
+#   -Help           显示本帮助
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$SrcSlug,
-    [Parameter(Mandatory=$true)]
-    [string]$DstSlug
+    [Parameter(Position=0)][string]$SrcSlug = "",
+    [Parameter(Position=1)][string]$DstSlug = "",
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
+
+# ---------- 用法输出（-Help 或缺参数时用） ----------
+function Show-Usage {
+    foreach ($line in (Get-Content -LiteralPath $PSCommandPath)) {
+        if (-not $line.StartsWith('#')) { break }
+        if ($line -eq '#') { Write-Host "" }
+        elseif ($line.StartsWith('# ')) { Write-Host $line.Substring(2) }
+        else { Write-Host $line }
+    }
+}
+
+if ($Help) {
+    Show-Usage
+    exit 0
+}
+
+if (-not $SrcSlug -or -not $DstSlug) {
+    Show-Usage
+    exit 1
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VibeHome = Resolve-Path (Join-Path $ScriptDir "..")

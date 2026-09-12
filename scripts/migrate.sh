@@ -15,11 +15,13 @@ set -euo pipefail
 
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
 if [ $# -lt 2 ]; then
-  echo "用法: $0 <源项目slug> <目标项目slug>"
-  echo ""
-  echo "例：把 old-app 的沉淀迁移到 new-app"
-  echo "  $0 old-app new-app"
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 fi
 
@@ -63,7 +65,7 @@ while IFS= read -r -d '' file; do
   else
     # 目标已存在，diff 一下
     if diff -q "$file" "$dst_file" > /dev/null 2>&1; then
-      echo "  ⏭️  相同: $rel（跳过）"
+      echo "  ⏭️  相同: ${rel}（跳过）"
       skipped=$((skipped+1))
     else
       echo "  ⚠️  冲突: $rel"

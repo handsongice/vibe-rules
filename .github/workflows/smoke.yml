@@ -1,0 +1,45 @@
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  bash:
+    name: bash smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu 是 bash 5，macOS 额外跑一遍系统自带 bash 3.2（见下面的步骤）
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash 版本
+        run: |
+          bash --version | head -n 1
+          uname -a
+
+      - name: 端到端冒烟测试
+        run: bash tests/smoke.sh
+
+      - name: 端到端冒烟测试（macOS 系统自带 bash 3.2）
+        if: runner.os == 'macOS'
+        run: |
+          /bin/bash --version | head -n 1
+          /bin/bash tests/smoke.sh
+
+  powershell:
+    name: powershell smoke (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: pwsh 版本
+        run: $PSVersionTable.PSVersion.ToString()
+
+      - name: 端到端冒烟测试
+        run: pwsh -NoProfile -File tests/smoke.ps1

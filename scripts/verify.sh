@@ -2,65 +2,193 @@
 # verify.sh —— 检查项目是否正确接入 vibe-rules
 #
 # 用法：
-#   /path/to/vibe-rules/scripts/verify.sh /path/to/your-project
+#   /path/to/vibe-rules/scripts/verify.sh [项目路径]
+#
+# 不传项目路径时检查当前目录。
+# 只检查 .vibe-rules 证据文件里记录过的 agent，不会因为「没装某个 agent」报错。
 
 set -euo pipefail
 
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+CONF_FILE="$VIBE_HOME/scripts/agents.conf"
 PROJECT_ROOT="${1:-$(pwd)}"
+
+if [ "$PROJECT_ROOT" = "-h" ] || [ "$PROJECT_ROOT" = "--help" ]; then
+  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 
 if [ ! -d "$PROJECT_ROOT" ]; then
   echo "❌ 目录不存在：$PROJECT_ROOT"
   exit 1
 fi
-
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 cd "$PROJECT_ROOT"
+
 echo "🔍 检查 $PROJECT_ROOT"
 echo ""
 
 PASS=0
 FAIL=0
 
-check() {
-  local desc="$1"
-  local condition="$2"
-  if eval "$condition"; then
-    echo "  ✅ $desc"
-    PASS=$((PASS+1))
+ok()   { PASS=$((PASS+1)); echo "  ✅ $1"; }
+bad()  { FAIL=$((FAIL+1)); echo "  ❌ $1"; }
+warn() { echo "  ⚠️  $1"; }
+
+# ---------- 1. 证据文件 ----------
+if [ ! -f ".vibe-rules" ]; then
+  echo "  ❌ 未接入：缺少 .vibe-rules 证据文件"
+  echo ""
+  echo "🔧 修复："
+  echo "   $VIBE_HOME/scripts/install.sh $PROJECT_ROOT"
+  exit 1
+fi
+ok ".vibe-rules 证据文件存在"
+
+RULES_HOME="$(sed -n 's/^rules_home=//p' .vibe-rules | head -n 1)"
+INSTALLED="$(sed -n 's/^agents=//p' .vibe-rules | head -n 1 | tr ',' ' ')"
+
+# ---------- 2. 规则库本体 ----------
+if [ -n "$RULES_HOME" ] && [ -d "$RULES_HOME" ]; then
+  ok "规则库路径有效：$RULES_HOME"
+else
+  bad "规则库路径失效：${RULES_HOME:-（空）}（被移动或删除？重跑 install.sh）"
+fi
+
+if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/README.md" ]; then
+  ok "规则库入口存在：README.md"
+else
+  bad "规则库入口缺失：${RULES_HOME:-?}/README.md"
+fi
+
+for extra in personal/preferences.md personal/memory.md global/anti-patterns.md; do
+  if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/$extra" ]; then
+    :
   else
-    echo "  ❌ $desc"
-    FAIL=$((FAIL+1))
+    warn "规则库中缺少 ${extra}（AGENTS.md 引用块会指向空路径）"
   fi
-}
+done
 
-# 1. AGENTS.md（核心）
-check "项目根有 AGENTS.md" "[ -f AGENTS.md ]"
-check "AGENTS.md 引用了规则库" "grep -q 'vibe' AGENTS.md 2>/dev/null"
+# ---------- 3. AGENTS.md 引用块 ----------
+if [ -f "AGENTS.md" ]; then
+  ok "项目根有 AGENTS.md"
+  if grep -q '<!-- vibe-rules:begin' AGENTS.md 2>/dev/null; then
+    ok "AGENTS.md 含 vibe-rules 引用块"
+    if [ -n "$RULES_HOME" ] && grep -qF "$RULES_HOME" AGENTS.md 2>/dev/null; then
+      ok "引用块指向当前规则库路径"
+    else
+      bad "引用块里的规则库路径不是当前路径（重跑 install.sh 即可刷新）"
+    fi
+  else
+    bad "AGENTS.md 缺少 vibe-rules 引用块（重跑 install.sh 注入）"
+  fi
+else
+  bad "项目根没有 AGENTS.md"
+fi
 
-# 2. 证据文件
-check ".vibe-rules 证据文件存在" "[ -f .vibe-rules ]"
+# ---------- 4. 入口文件（只查装过的） ----------
+if [ ! -f "$CONF_FILE" ]; then
+  bad "缺少 agent 清单：$CONF_FILE"
+else
+  NUMS=()
+  NAMES=()
+  TYPES=()
+  PATHS=()
+  while IFS='|' read -r num name type path doc; do
+    case "$num" in
+      ''|'#'*) continue ;;
+    esac
+    NUMS+=("$num")
+    NAMES+=("$name")
+    TYPES+=("$type")
+    PATHS+=("$path")
+  done < "$CONF_FILE"
 
-# 3. 单文件型（有官方文档的）
-check "CLAUDE.md 存在" "[ -e CLAUDE.md ]"
-check ".cursorrules 存在" "[ -e .cursorrules ]"
-check ".windsurfrules 存在" "[ -e .windsurfrules ]"
-check ".github/copilot-instructions.md 存在" "[ -e .github/copilot-instructions.md ]"
+  INSTALLED_SELECTED=" "
+  for token in $INSTALLED; do
+    found=false
+    i=0
+    while [ $i -lt "${#NUMS[@]}" ]; do
+      if [ "$token" = "${NUMS[$i]}" ]; then
+        found=true
+        break
+      fi
+      i=$((i+1))
+    done
+    if [ "$found" = true ]; then
+      INSTALLED_SELECTED="$INSTALLED_SELECTED$token "
+    else
+      bad "证据文件里的 agent 编号无效：$token"
+    fi
+  done
 
-# 4. 目录型
-check ".cursor/rules/ 存在" "[ -d .cursor/rules ]"
-check ".qoder/rules/ 存在" "[ -d .qoder/rules ]"
-check ".trae/rules/ 存在" "[ -d .trae/rules ]"
-check ".codebuddy/rules/ 存在" "[ -d .codebuddy/rules ]"
+  if [ "$INSTALLED_SELECTED" = " " ]; then
+    bad "证据文件没有记录任何 agent（重跑 install.sh）"
+  fi
 
+  echo ""
+  echo "🔗 已安装 agent 的入口文件："
+  i=0
+  while [ $i -lt "${#NUMS[@]}" ]; do
+    num="${NUMS[$i]}"
+    name="${NAMES[$i]}"
+    type="${TYPES[$i]}"
+    path="${PATHS[$i]}"
+    i=$((i+1))
+
+    case "$INSTALLED_SELECTED" in
+      *" $num "*) ;;
+      *) continue ;;
+    esac
+
+    case "$type" in
+      native)
+        ok "${name}：原生读 AGENTS.md"
+        ;;
+      single)
+        if [ -L "$path" ]; then
+          dest="$(readlink "$path")"
+          case "$dest" in
+            AGENTS.md|../AGENTS.md|"$PROJECT_ROOT/AGENTS.md")
+              ok "${path}（symlink → AGENTS.md）"
+              ;;
+            *)
+              bad "$path 是指向别处的 symlink：$dest"
+              ;;
+          esac
+        elif [ -f "$path" ]; then
+          if grep -q '<!-- vibe-rules:begin' "$path" 2>/dev/null; then
+            ok "${path}（复制文件，含引用块）"
+          else
+            bad "$path 是真实文件且不含 vibe-rules 引用块"
+          fi
+        else
+          bad "$path 不存在"
+        fi
+        ;;
+      dir)
+        if [ ! -f "$path" ]; then
+          bad "$path 不存在"
+        elif grep -q 'vibe-rules' "$path" 2>/dev/null; then
+          ok "$path"
+        else
+          bad "$path 存在但不是 vibe-rules 生成的文件"
+        fi
+        ;;
+    esac
+  done
+fi
+
+# ---------- 汇总 ----------
 echo ""
 echo "📊 结果：$PASS 通过，$FAIL 未通过"
 
 if [ "$FAIL" -gt 0 ]; then
   echo ""
-  echo "🔧 修复：重新跑 install.sh"
+  echo "🔧 修复：重跑 install（幂等，不会覆盖你的 AGENTS.md 正文）"
   echo "   $VIBE_HOME/scripts/install.sh $PROJECT_ROOT"
   exit 1
-else
-  echo ""
-  echo "🎉 项目已正确接入 vibe-rules。"
 fi
+
+echo ""
+echo "🎉 项目已正确接入 vibe-rules。"
