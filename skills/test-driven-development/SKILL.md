@@ -1,12 +1,8 @@
 ---
 name: test-driven-development
 description: 写新功能或修 bug 时，先写失败测试再写实现代码
-when_to_use:
-  - 实现任何新功能
-  - 修任何 bug
-  - 重构（改之前测试全绿，改之后也要全绿）
-  - 改行为
-applies_to: [all]
+metadata:
+  short-description: 先写失败测试再写实现
 ---
 
 # TDD（测试驱动开发）

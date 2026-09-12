@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Taste"
+  short_description: "落地页与营销站反塑料感"
+  default_prompt: "Use $frontend-taste to design this landing page without the usual AI look."

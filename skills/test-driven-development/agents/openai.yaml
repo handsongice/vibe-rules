@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Driven Development"
+  short_description: "先写失败测试再写实现"
+  default_prompt: "Use $test-driven-development to implement this with a failing test first."

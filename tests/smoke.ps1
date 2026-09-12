@@ -68,6 +68,10 @@ try {
         Copy-Item -LiteralPath $_.FullName -Destination $R1 -Recurse -Force
     }
 
+    # 模拟 pwsh 在只读 HOME 环境落到工作目录的运行时垃圾：不该被复制进项目副本
+    Write-Text (Join-Path $R1 "ModuleAnalysisCache-TESTONLY") "junk"
+    Write-Text (Join-Path $R1 "StartupProfileData-NonInteractive") "junk"
+
     $Install  = Join-Path $R1 "scripts/install.ps1"
     $Verify   = Join-Path $R1 "scripts/verify.ps1"
     $Uninst   = Join-Path $R1 "scripts/uninstall.ps1"
@@ -98,7 +102,10 @@ try {
     Check "副本含 languages/" { Test-Path (Join-Path $P1 ".vibe-rules/languages") }
     Check "副本含 skills/README.md" { Test-Path (Join-Path $P1 ".vibe-rules/skills/README.md") }
     Check "副本不含 scripts/" { -not (Test-Path (Join-Path $P1 ".vibe-rules/scripts")) }
-    Check "副本无 pwsh 运行时垃圾文件" { -not (Test-Path (Join-Path $P1 ".vibe-rules/StartupProfileData-NonInteractive")) }
+    Check "副本不含插件清单（打包产物不跟项目走）" { -not (Test-Path (Join-Path $P1 ".vibe-rules/.codex-plugin")) }
+    Check "副本不含 VERSION/CHANGELOG" { -not (Test-Path (Join-Path $P1 ".vibe-rules/VERSION")) }
+    Check "副本无 pwsh 运行时垃圾文件（StartupProfileData）" { -not (Test-Path (Join-Path $P1 ".vibe-rules/StartupProfileData-NonInteractive")) }
+    Check "副本无 pwsh 运行时垃圾文件（ModuleAnalysisCache）" { -not (Test-Path (Join-Path $P1 ".vibe-rules/ModuleAnalysisCache-TESTONLY")) }
     Check "证据文件在副本内" { Test-Path (Join-Path $P1 ".vibe-rules/installed") }
     Check "证据文件记录 mode=embedded" { (Raw (Join-Path $P1 ".vibe-rules/installed")).Contains("mode=embedded") }
     Check "CLAUDE.md 入口（symlink 或复制）" { Test-Path (Join-Path $P1 "CLAUDE.md") }
@@ -223,7 +230,40 @@ try {
     Check "migrate 退出码 0" { $code -eq 0 }
     Check "沉淀内容已迁移到 mig-b" { (Raw (Join-Path $R1 "projects/mig-b/README.md")).Contains("沉淀内容") }
 
-    Write-Host "== 13. uninstall =="
+    Write-Host "== 13. 插件打包结构 =="
+    Check "Codex 插件清单存在" { Test-Path (Join-Path $R1 ".codex-plugin/plugin.json") }
+    Check "Claude 插件清单存在" { Test-Path (Join-Path $R1 ".claude-plugin/plugin.json") }
+    Check "Codex marketplace 存在" { Test-Path (Join-Path $R1 ".agents/plugins/marketplace.json") }
+    Check "Claude marketplace 存在" { Test-Path (Join-Path $R1 ".claude-plugin/marketplace.json") }
+    Check "插件清单 JSON 合法" {
+        $null = Get-Content -LiteralPath (Join-Path $R1 ".codex-plugin/plugin.json") -Raw | ConvertFrom-Json
+        $null = Get-Content -LiteralPath (Join-Path $R1 ".agents/plugins/marketplace.json") -Raw | ConvertFrom-Json
+        $true
+    }
+    Check "插件清单含 skill 列表" { (Raw (Join-Path $R1 ".codex-plugin/plugin.json")).Contains("./skills/code-review") }
+    Check "VERSION 是 semver" { (Raw (Join-Path $R1 "VERSION")).Trim() -match '^\d+\.\d+\.\d+$' }
+    Check "插件版本与 VERSION 一致" {
+        $v = (Raw (Join-Path $R1 "VERSION")).Trim()
+        $manifest = Get-Content -LiteralPath (Join-Path $R1 ".codex-plugin/plugin.json") -Raw | ConvertFrom-Json
+        $manifest.version -eq $v
+    }
+    Check "每个 skill 有 agents/openai.yaml" {
+        $ok = $true
+        foreach ($d in Get-ChildItem -Path (Join-Path $R1 "skills") -Directory) {
+            if (-not (Test-Path (Join-Path $d.FullName "agents/openai.yaml"))) { $ok = $false }
+        }
+        $ok
+    }
+    Check "skill 的 default_prompt 带 \$skill-name" {
+        $ok = $true
+        foreach ($d in Get-ChildItem -Path (Join-Path $R1 "skills") -Directory) {
+            $y = Raw (Join-Path $d.FullName "agents/openai.yaml")
+            if (-not $y.Contains("`$$($d.Name)")) { $ok = $false }
+        }
+        $ok
+    }
+
+    Write-Host "== 14. uninstall =="
     $code = Run-Script $Uninst @($P1)
     Check "uninstall 退出码 0" { $code -eq 0 }
     Refute "CLAUDE.md 已删除" { Test-Path (Join-Path $P1 "CLAUDE.md") }
@@ -236,9 +276,12 @@ try {
     Refute "引用块已移除" { (Raw $Agents1).Contains("<!-- vibe-rules:begin") }
     Check "项目专属笔记默认保留" { Test-Path (Join-Path $P1 ".vibe-rules/project/README.md") }
     Refute "verify 正确报未接入" { (Run-Script $Verify @($P1)) -eq 0 }
+    # 旧版可能把运行时垃圾带进副本：-PurgeProject 必须能整个删净
+    Write-Text (Join-Path $P1 ".vibe-rules/ModuleAnalysisCache-stale") "junk"
     $code = Run-Script $Uninst @($P1, "-PurgeProject")
     Check "uninstall -PurgeProject 退出码 0" { $code -eq 0 }
     Refute "-PurgeProject 删掉项目笔记目录" { Test-Path (Join-Path $P1 ".vibe-rules") }
+    Refute "-PurgeProject 删净副本（无残留垃圾）" { Test-Path (Join-Path $P1 ".vibe-rules/ModuleAnalysisCache-stale") }
 }
 finally {
     Remove-Item -LiteralPath $TmpRoot -Recurse -Force -ErrorAction SilentlyContinue

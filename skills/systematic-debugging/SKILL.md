@@ -1,13 +1,8 @@
 ---
 name: systematic-debugging
 description: 遇到任何 bug、测试失败、意外行为时，先找根因再动手改，不要猜
-when_to_use:
-  - 测试挂了
-  - 出现 bug（不管线上还是本地）
-  - 行为不符合预期
-  - 构建失败、集成问题
-  - 已经试了一次修复没好
-applies_to: [all]
+metadata:
+  short-description: 先找根因再改代码
 ---
 
 # 系统化调试

@@ -17,6 +17,7 @@
 #  11. uninstall：入口清干净、AGENTS.md 正文保留、项目笔记保留（--purge-project 才删）
 #  12. migrate：跨项目迁移（含 bash 3.2 重复运行回归）
 #  13. 带空格路径
+#  14. 插件打包：skill 结构 / 清单一致性 / 版本同步
 
 set -euo pipefail
 
@@ -53,6 +54,8 @@ done
 echo "== 2. 全新项目安装（默认自包含副本模式） =="
 R1="$TMP_ROOT/rules1"
 copy_repo "$R1"
+# 模拟 pwsh 在只读 HOME 环境落到工作目录的运行时垃圾：不该被复制进项目副本
+touch "$R1/ModuleAnalysisCache-TESTONLY" "$R1/StartupProfileData-NonInteractive"
 P1="$TMP_ROOT/proj-empty"
 mkdir -p "$P1"
 check "install --agents 1,4,7,12 --yes" "$R1/scripts/install.sh" "$P1" --agents "1,4,7,12" --yes
@@ -65,6 +68,10 @@ check "副本含 global/iron-rules.md" test -f "$P1/.vibe-rules/global/iron-rule
 check "副本含 languages/" test -d "$P1/.vibe-rules/languages"
 check "副本含 skills/README.md" test -f "$P1/.vibe-rules/skills/README.md"
 check "副本不含 scripts/（工具不进项目）" test ! -e "$P1/.vibe-rules/scripts"
+check "副本不含插件清单（打包产物不跟着项目走）" test ! -e "$P1/.vibe-rules/.codex-plugin"
+check "副本不含 VERSION/CHANGELOG" test ! -e "$P1/.vibe-rules/VERSION"
+check "副本不含 pwsh 运行时垃圾（ModuleAnalysisCache）" test ! -e "$P1/.vibe-rules/ModuleAnalysisCache-TESTONLY"
+check "副本不含 pwsh 运行时垃圾（StartupProfileData）" test ! -e "$P1/.vibe-rules/StartupProfileData-NonInteractive"
 check "证据文件在副本内" test -f "$P1/.vibe-rules/installed"
 check "证据文件记录 mode=embedded" grep -q '^mode=embedded$' "$P1/.vibe-rules/installed"
 check "CLAUDE.md symlink" test -L "$P1/CLAUDE.md"
@@ -206,6 +213,7 @@ printf '\n# 规则库后来加的新章节\n' >> "$R2/global/anti-patterns.md"
 "$R2/scripts/update.sh" "$P5" >/dev/null 2>&1
 check "update 后新规则进副本" grep -q '规则库后来加的新章节' "$P5/.vibe-rules/global/anti-patterns.md"
 check "update 不覆盖项目笔记" grep -q '我的项目专属决策' "$P5/.vibe-rules/project/README.md"
+check "update 不会误删 project/ 目录" test -f "$P5/.vibe-rules/project/README.md"
 check "update 后 verify 通过" "$R2/scripts/verify.sh" "$P5"
 
 echo "== 11. uninstall =="
@@ -221,8 +229,11 @@ refute "引用块已移除" grep -q '<!-- vibe-rules:begin' "$P1/AGENTS.md"
 check "项目专属笔记默认保留" test -f "$P1/.vibe-rules/project/README.md"
 check "项目笔记跟项目名建档" grep -q 'proj-empty' "$P1/.vibe-rules/project/README.md"
 refute "verify 正确报未接入" "$R2/scripts/verify.sh" "$P1"
+# 旧版可能把运行时垃圾带进副本：--purge-project 必须能整个删净
+touch "$P1/.vibe-rules/ModuleAnalysisCache-stale"
 "$R2/scripts/uninstall.sh" "$P1" --purge-project >/dev/null 2>&1
 refute "--purge-project 删掉项目笔记目录" test -d "$P1/.vibe-rules"
+refute "--purge-project 删净副本（无残留垃圾）" test -e "$P1/.vibe-rules"
 
 echo "== 12. migrate（含 bash 3.2 重复运行回归） =="
 MAR="$R2/projects/mig-a"
@@ -240,6 +251,36 @@ echo "== 13. 带空格路径 =="
 P6="$TMP_ROOT/proj with space"
 check "install 带空格路径" "$R2/scripts/install.sh" "$P6" --agents "1" --yes
 check "verify 带空格路径" "$R2/scripts/verify.sh" "$P6"
+
+echo "== 14. 插件打包 =="
+check "validate-package.sh 通过" "$R2/scripts/validate-package.sh"
+check "插件清单含 skill 列表" grep -q './skills/code-review' "$R2/.codex-plugin/plugin.json"
+check "每个 skill 有 agents/openai.yaml" test -f "$R2/skills/code-review/agents/openai.yaml"
+check "Codex marketplace 收录 vibe-rules" grep -q 'vibe-rules' "$R2/.agents/plugins/marketplace.json"
+check "Claude marketplace 收录 vibe-rules" grep -q 'vibe-rules' "$R2/.claude-plugin/marketplace.json"
+
+mkdir -p "$R2/skills/fake-skill/agents"
+printf -- '---\nname: fake-skill\ndescription: 测试用\nmetadata:\n  short-description: 测试\n---\n\n# fake\n' > "$R2/skills/fake-skill/SKILL.md"
+printf 'interface:\n  display_name: "Fake"\n  short_description: "测试"\n  default_prompt: "Use $fake-skill now."\n' > "$R2/skills/fake-skill/agents/openai.yaml"
+refute "新增 skill 后未同步 → 检查失败" "$R2/scripts/sync-plugin-skills.sh" --check
+"$R2/scripts/sync-plugin-skills.sh" >/dev/null 2>&1
+check "同步后插件清单跟上" grep -q './skills/fake-skill' "$R2/.codex-plugin/plugin.json"
+check "同步后整体校验通过" "$R2/scripts/validate-package.sh"
+
+printf -- '---\nname: wrong-name\ndescription: 名字不一致\n---\n\n# wrong\n' > "$R2/skills/fake-skill/SKILL.md"
+refute "frontmatter name 与目录不一致 → 检查失败" "$R2/scripts/validate-package.sh"
+printf -- '---\nname: fake-skill\ndescription: 测试用\nwhen_to_use:\n  - 测试\n---\n\n# fake\n' > "$R2/skills/fake-skill/SKILL.md"
+refute "frontmatter 混入旧字段 → 检查失败" "$R2/scripts/validate-package.sh"
+rm -rf "$R2/skills/fake-skill"
+"$R2/scripts/sync-plugin-skills.sh" >/dev/null 2>&1
+check "移除 skill 后清单回同步" "$R2/scripts/validate-package.sh"
+
+chmod 644 "$R2/CHANGELOG.md" 2>/dev/null || true
+check "bump-version.sh 可执行" test -x "$R2/scripts/bump-version.sh"
+check "bump-version.sh 1.0.1" bash "$R2/scripts/bump-version.sh" 1.0.1
+check "VERSION 已更新" grep -q '^1.0.1$' "$R2/VERSION"
+check "插件清单版本已同步" grep -q '"version": "1.0.1"' "$R2/.codex-plugin/plugin.json"
+check "CHANGELOG 插入新版本段" grep -q '## \[1.0.1\]' "$R2/CHANGELOG.md"
 
 echo ""
 echo "📊 smoke：$PASS 通过，$FAIL 失败"

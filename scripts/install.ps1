@@ -156,13 +156,16 @@ if ($Mode -eq "embedded") {
     New-Item -ItemType Directory -Path $RulesDir -Force | Out-Null
 
     # 排除清单：工具本身和项目专属笔记不进副本
-    $exclude = @(".git", ".github", ".gitignore", "scripts", "tests", "templates", "projects", "project", "inbox")
+    # 排除清单：工具与打包清单不跟着项目走（项目只需要规则本体）
+    $exclude = @(".git", ".github", ".gitignore", ".gitattributes", "scripts", "tests", "templates",
+                 "projects", "project", "inbox", ".agents", ".claude-plugin", ".codex-plugin",
+                 "VERSION", "CHANGELOG.md")
     $rootLen = $VibeHome.Length + 1
     Get-ChildItem -Path $VibeHome -Recurse -Force | ForEach-Object {
         $rel = $_.FullName.Substring($rootLen)
         $top = ($rel -split '[\\/]')[0]
         if ($exclude -contains $top) { return }
-        if ($_.Name -like "StartupProfileData*") { return }
+        if ($_.Name -like "StartupProfileData*" -or $_.Name -like "ModuleAnalysisCache*") { return }
         if ($NoPersonal -and $top -eq "personal") { return }
         $dest = Join-Path $RulesDir $rel
         if ($_.PSIsContainer) {
@@ -174,6 +177,20 @@ if ($Mode -eq "embedded") {
             }
             Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
         }
+    }
+
+    # 清掉旧版曾装进来的打包产物（保持幂等，也让 --purge-project 能删净）
+    foreach ($stale in @(".agents", ".claude-plugin", ".codex-plugin", "VERSION", "CHANGELOG.md", ".gitattributes")) {
+        $stalePath = Join-Path $RulesDir $stale
+        if (Test-Path -LiteralPath $stalePath) {
+            Remove-Item -LiteralPath $stalePath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # pwsh 运行时垃圾（旧版可能带进副本）：清掉，保证副本干净、-PurgeProject 能删净
+    foreach ($pat in @("ModuleAnalysisCache*", "StartupProfileData*")) {
+        Get-ChildItem -Path $RulesDir -Filter $pat -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
     # -NoPersonal 时清掉上一轮遗留的 personal\（保持幂等）
@@ -440,8 +457,10 @@ if ($Mode -eq "embedded") {
 Write-Host "  ✅ $evidenceLabel（mode=$Mode，agents=$agentsList）"
 
 # 清掉 pwsh 在某些环境下往工作目录写的运行时垃圾文件
-Get-ChildItem -Path $ProjectRoot -Filter "StartupProfileData*" -Force -ErrorAction SilentlyContinue |
-    Remove-Item -Force -ErrorAction SilentlyContinue
+foreach ($pat in @("ModuleAnalysisCache*", "StartupProfileData*")) {
+    Get-ChildItem -Path $ProjectRoot -Filter $pat -Force -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
 
 Write-Host ""
 Write-Host "🎉 完成。"

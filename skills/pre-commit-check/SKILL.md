@@ -1,10 +1,8 @@
 ---
 name: pre-commit-check
 description: 在 git commit 之前运行的检查清单，确保不把半成品提交进去
-when_to_use:
-  - 用户说"commit"、"提交"、"帮我提交"
-  - agent 自己准备执行 git commit 之前
-applies_to: [all]
+metadata:
+  short-description: 提交前必跑检查清单
 ---
 
 # Pre-commit 检查

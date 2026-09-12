@@ -1,0 +1,20 @@
+{
+  "name": "vibe-rules",
+  "interface": {
+    "displayName": "Vibe Rules"
+  },
+  "plugins": [
+    {
+      "name": "vibe-rules",
+      "source": {
+        "source": "url",
+        "url": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -1,11 +1,8 @@
 ---
 name: writing-plans
 description: 有了 spec 或多步任务需求后、动代码前，写一份别人能照着做的实现计划
-when_to_use:
-  - brainstorming 走完 architectural 路径、spec 已批准
-  - 用户给了多步任务且自己说"先写计划"
-  - 任务超过 3 个文件或预计改动超过 100 行
-applies_to: [all]
+metadata:
+  short-description: 多步任务动代码前先写实现计划
 ---
 
 # 写实现计划

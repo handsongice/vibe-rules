@@ -1,0 +1,4 @@
+interface:
+  display_name: "Systematic Debugging"
+  short_description: "先找根因再改代码"
+  default_prompt: "Use $systematic-debugging to find the root cause before changing anything."

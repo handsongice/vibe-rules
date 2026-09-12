@@ -1,11 +1,8 @@
 ---
 name: handoff
 description: 结束一个会话/换到另一个 agent 前，写一份紧凑的交接文档，让下一个 agent 能无缝接着干
-when_to_use:
-  - 用户说"换个 agent 继续"、"新开一个会话接着做"
-  - 当前会话快满了、要重启
-  - 一个阶段做完了，要交给另一个工具
-applies_to: [all]
+metadata:
+  short-description: 跨会话写紧凑交接文档
 ---
 
 # 跨会话交接

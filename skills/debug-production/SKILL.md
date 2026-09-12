@@ -1,10 +1,8 @@
 ---
 name: debug-production
 description: 生产环境出问题时的排查流程，避免瞎改、乱回滚
-when_to_use:
-  - 用户说"线上挂了"、"生产报错"、"用户反馈 X 不工作"
-  - 问题无法在本地复现
-applies_to: [all]
+metadata:
+  short-description: 线上故障止血与排查
 ---
 
 # 生产问题排查

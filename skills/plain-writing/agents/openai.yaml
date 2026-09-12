@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plain Writing"
+  short_description: "技术文档去 AI 味"
+  default_prompt: "Use $plain-writing to rewrite this doc so it reads like a human wrote it."

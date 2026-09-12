@@ -14,24 +14,24 @@
 
 ```
 skills/<skill-name>/
-  SKILL.md        # 唯一必需文件
-  README.md       # 可选，给人看的背景
-  examples/       # 可选，示例输入输出
-  scripts/        # 可选，可执行脚本
+  SKILL.md            # 唯一必需文件
+  agents/openai.yaml  # 插件 UI 元数据：display_name / short_description / default_prompt
+  references/         # 可选，按需加载的长文档
+  scripts/            # 可选，可执行脚本
 ```
+
+`agents/openai.yaml` 里的 `default_prompt` 必须带 `$<skill-name>`，否则在 agent 的
+skill 列表里点名调用会失灵；`scripts/validate-package.sh` 会检查这一条。
 
 ## SKILL.md 模板
 
 ```markdown
 ---
-# name 和 description 必填：description 要写清"什么时候用"，agent 靠它决定加不加载
+# 标准字段只有 name + description：description 要写清"什么时候用"，agent 靠它决定加不加载
 name: <skill-name>
 description: <一句话说明什么时候该用这个 skill>
-# 以下两个可选，现有 skill 也不统一，按需写：
-when_to_use:
-  - <触发场景 1>
-  - <触发场景 2>
-applies_to: [java, python, nodejs, vue, react]  # 或 all
+metadata:
+  short-description: <UI 里显示的一句话，10-20 字>
 ---
 
 # <Skill 标题>
@@ -54,9 +54,10 @@ applies_to: [java, python, nodejs, vue, react]  # 或 all
 
 ## 为什么要有 frontmatter
 
-- Qoder、Trae、CodeBuddy 都支持 frontmatter 触发（`always_on` / `model_decision` / `glob`）。
-- 这个文件里的 frontmatter 是给这些 IDE 用的；纯 markdown 部分对所有 agent 都可读。
-- 不要在正文里写依赖特定 agent 的私有语法。
+- `name` + `description` 是 agent skill 的通用标准（Codex / Claude Code 都认），
+  description 决定这个 skill 什么时候被选中加载。
+- `metadata.short-description` 是 UI 里显示的一句话，不影响触发判断。
+- 触发条件的正文写在 `SKILL.md` 的「触发条件」一节；不要在 frontmatter 里塞私有语法。
 
 ## 现有 skills
 

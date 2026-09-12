@@ -1,0 +1,52 @@
+{
+  "version": "1.0.0",
+  "description": "给所有 coding agent 共用的个人开发宪法：铁律、技术栈规范、10 个可复用 skill。",
+  "author": {
+    "name": "handsongice",
+    "url": "https://github.com/handsongice"
+  },
+  "homepage": "https://github.com/handsongice/vibe-rules",
+  "repository": "https://github.com/handsongice/vibe-rules",
+  "license": "MIT",
+  "keywords": [
+    "agent",
+    "skills",
+    "rules",
+    "codex",
+    "claude-code",
+    "cursor",
+    "tdd",
+    "code-review"
+  ],
+  "skills": [
+    "./skills/brainstorming",
+    "./skills/code-review",
+    "./skills/debug-production",
+    "./skills/frontend-taste",
+    "./skills/handoff",
+    "./skills/plain-writing",
+    "./skills/pre-commit-check",
+    "./skills/systematic-debugging",
+    "./skills/test-driven-development",
+    "./skills/writing-plans"
+  ],
+  "name": "vibe-rules",
+  "interface": {
+    "displayName": "Vibe Rules",
+    "shortDescription": "跨 agent 共用的开发宪法与 10 个 skill",
+    "longDescription": "把个人开发规矩固定成一份跨 agent 的 markdown 规则库：六条铁律、技术栈规范、踩坑库，以及 brainstorming / writing-plans / TDD / systematic-debugging / code-review / handoff 等 10 个可复用 skill。",
+    "developerName": "handsongice",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "用 vibe-rules 的规矩帮我实现这个需求。",
+      "按 code-review skill 自审一遍刚才的改动。"
+    ],
+    "websiteURL": "https://github.com/handsongice/vibe-rules",
+    "brandColor": "#2563EB"
+  }
+}

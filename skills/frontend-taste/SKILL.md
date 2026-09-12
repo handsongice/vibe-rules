@@ -1,12 +1,8 @@
 ---
 name: frontend-taste
 description: 做 landing page / portfolio / marketing 页 / redesign 时，避免 AI 生成前端那种千篇一律的塑料感
-when_to_use:
-  - 做落地页、作品集、品牌页、营销站
-  - 改现有站点的视觉
-  - 用户说"做个页面"、"搞个官网"
-not_for: dashboard、数据表格、多步表单、后台管理系统（这些用官方设计系统，不用这个）
-applies_to: [vue, react]
+metadata:
+  short-description: 落地页与营销站反塑料感
 ---
 
 # 反 AI 塑料感前端

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brainstorming"
+  short_description: "把想法聊成设计再做"
+  default_prompt: "Use $brainstorming to turn this rough idea into a clear design before writing code."

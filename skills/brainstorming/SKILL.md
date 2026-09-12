@@ -1,11 +1,8 @@
 ---
 name: brainstorming
 description: 在做任何创造性工作（新功能、新组件、改行为）之前，先把需求聊清楚再动手
-when_to_use:
-  - 用户提了新功能、新组件、新行为修改
-  - 用户说"帮我做 X"但需求没说透
-  - 任何非平凡的代码改动前
-applies_to: [all]
+metadata:
+  short-description: 把想法聊成设计再做
 ---
 
 # 把想法聊成设计

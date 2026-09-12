@@ -1,10 +1,8 @@
 ---
 name: code-review
 description: 让 agent 以资深工程师视角 review 自己刚写的代码，找问题再交付
-when_to_use:
-  - 用户说"review"、"自审"、"看看有没有问题"
-  - 一个功能写完、准备交付前
-applies_to: [all]
+metadata:
+  short-description: 交付前自审一遍
 ---
 
 # Code Review（自审）

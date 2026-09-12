@@ -42,8 +42,10 @@ $ProjectRoot = (Resolve-Path $ProjectRoot).Path
 Set-Location $ProjectRoot
 
 Write-Host "🔍 检查 $ProjectRoot"
-Get-ChildItem -Path $ProjectRoot -Filter "StartupProfileData*" -Force -ErrorAction SilentlyContinue |
-    Remove-Item -Force -ErrorAction SilentlyContinue
+foreach ($pat in @("ModuleAnalysisCache*", "StartupProfileData*")) {
+    Get-ChildItem -Path $ProjectRoot -Filter $pat -Force -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
 
 Write-Host ""
 

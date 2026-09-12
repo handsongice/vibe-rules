@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pre-commit Check"
+  short_description: "提交前必跑检查清单"
+  default_prompt: "Use $pre-commit-check before you commit these changes."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff"
+  short_description: "跨会话写紧凑交接文档"
+  default_prompt: "Use $handoff to write a compact handoff doc for the next session."

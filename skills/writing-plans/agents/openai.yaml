@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Plans"
+  short_description: "多步任务动代码前先写实现计划"
+  default_prompt: "Use $writing-plans to write an implementation plan for this multi-step task."

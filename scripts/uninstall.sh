@@ -138,23 +138,35 @@ if [ -n "$EVIDENCE" ]; then
   removed=$((removed+1))
 fi
 
-# 删掉副本里的规则部分，保留 project/ 项目笔记
-if [ -d ".vibe-rules" ]; then
-  for sub in global languages skills personal project; do
-    if [ -d ".vibe-rules/$sub" ]; then
-      if [ "$sub" = "project" ] && [ "$PURGE_PROJECT" != true ]; then
-        echo "  ℹ️  保留 .vibe-rules/project/（项目专属笔记；要删加 --purge-project）"
-        continue
-      fi
-      rm -r ".vibe-rules/$sub"
-      echo "  ✅ 删除 .vibe-rules/$sub/"
-      removed=$((removed+1))
+# 删掉副本里的规则部分，保留 project/ 项目笔记；--purge-project 直接把整个副本目录删掉
+if [ -d ".vibe-rules" ] && [ "$PURGE_PROJECT" = true ]; then
+  rm -rf -- ".vibe-rules"
+  echo "  ✅ 删除 .vibe-rules/（含 project/ 项目笔记，--purge-project）"
+  removed=$((removed+1))
+elif [ -d ".vibe-rules" ]; then
+  # .agents/.claude-plugin/.codex-plugin 是旧版曾进过副本的打包产物，一并清掉
+  for sub in global languages skills personal project .agents .claude-plugin .codex-plugin; do
+    [ -d ".vibe-rules/$sub" ] || continue
+    if [ "$sub" = "project" ] && [ "$PURGE_PROJECT" != true ]; then
+      echo "  ℹ️  保留 .vibe-rules/project/（项目专属笔记；要删加 --purge-project）"
+      continue
     fi
+    rm -r ".vibe-rules/$sub"
+    echo "  ✅ 删除 .vibe-rules/$sub/"
+    removed=$((removed+1))
   done
-  for f in README.md LICENSE .gitignore VERSION AGENTS.md installed; do
+  for f in README.md LICENSE .gitignore VERSION CHANGELOG.md .gitattributes AGENTS.md installed; do
     if [ -f ".vibe-rules/$f" ]; then
       rm -f ".vibe-rules/$f"
       echo "  ✅ 删除 .vibe-rules/$f"
+      removed=$((removed+1))
+    fi
+  done
+  # pwsh 运行时缓存（旧版可能被复制进副本）也一并清掉
+  for junk in ".vibe-rules"/ModuleAnalysisCache* ".vibe-rules"/StartupProfileData*; do
+    if [ -f "$junk" ]; then
+      rm -f -- "$junk"
+      echo "  ✅ 删除 ${junk}（运行时垃圾）"
       removed=$((removed+1))
     fi
   done

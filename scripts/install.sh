@@ -210,14 +210,39 @@ if [ "$MODE" = "embedded" ]; then
   echo "📄 复制规则副本 → $RULES_DIR"
   mkdir -p "$RULES_DIR"
   # project/ 是项目专属笔记，必须排除在 --delete 之外（否则更新会把笔记删掉）
-  RSYNC_ARGS=(-a --delete --exclude=.git --exclude=.github --exclude=.gitignore
-              --exclude=scripts --exclude=tests --exclude=templates
-              --exclude=projects --exclude=project --exclude=inbox)
-  if [ "$WITH_PERSONAL" = true ]; then
-    rsync "${RSYNC_ARGS[@]}" "$VIBE_HOME/" "$RULES_DIR/"
-  else
-    # --delete-excluded：上一次安装带进去的 personal/ 也要一并清掉
-    rsync "${RSYNC_ARGS[@]}" --exclude=personal --delete-excluded "$VIBE_HOME/" "$RULES_DIR/"
+  # 排除清单：工具与打包清单不跟着项目走（项目只需要规则本体）
+  # 注意：不要用 --delete-excluded —— 它会连 .vibe-rules/project/ 项目笔记一起删掉。
+  # 这里用普通 --delete（只删源里没有的），旧版装进来的残留单独精确清理。
+  RSYNC_ARGS=(-a --delete
+              --exclude=/.git --exclude=/.github --exclude=/.gitignore --exclude=/.gitattributes
+              --exclude=/scripts --exclude=/tests --exclude=/templates
+              --exclude=/projects --exclude=/project --exclude=/inbox
+              --exclude=/.agents --exclude=/.claude-plugin --exclude=/.codex-plugin
+              --exclude=/VERSION --exclude=/CHANGELOG.md
+              --exclude=/ModuleAnalysisCache* --exclude=/StartupProfileData*)
+  # 旧版曾把打包产物复制进副本：精确清掉，避免遗留（project/ 绝不在此列）
+  for stale in .agents .claude-plugin .codex-plugin; do
+    if [ -e "$RULES_DIR/$stale" ] && [ "$RULES_DIR" != "/" ] && [ "$RULES_DIR" != "$HOME" ]; then
+      rm -rf -- "$RULES_DIR/$stale"
+    fi
+  done
+  for stale in VERSION CHANGELOG.md .gitattributes; do
+    rm -f -- "$RULES_DIR/$stale"
+  done
+  # pwsh 在只读 HOME 环境会把运行时缓存落到工作目录；旧版可能被复制进副本，一并清掉
+  for stale in "$RULES_DIR"/ModuleAnalysisCache* "$RULES_DIR"/StartupProfileData*; do
+    if [ -f "$stale" ]; then
+      rm -f -- "$stale"
+    fi
+  done
+
+  # rsync 无条件跑：--no-personal 只是多一条排除 + 清掉上一轮遗留的 personal/
+  if [ "$WITH_PERSONAL" = false ]; then
+    RSYNC_ARGS+=(--exclude=/personal)
+  fi
+  rsync "${RSYNC_ARGS[@]}" "$VIBE_HOME/" "$RULES_DIR/"
+  if [ "$WITH_PERSONAL" = false ]; then
+    rm -rf -- "$RULES_DIR/personal"
     PERSONAL_NOTE="（副本里未包含，跳过）"
   fi
   echo "   ✅ 规则本体（global / languages / skills）"

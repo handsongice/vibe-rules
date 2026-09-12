@@ -1,0 +1,4 @@
+interface:
+  display_name: "Production Debugging"
+  short_description: "线上故障止血与排查"
+  default_prompt: "Use $debug-production to stabilize this production incident and find the cause."

@@ -158,7 +158,12 @@ vibe-rules/（你 clone 到的任意路径）
 ├── inbox/                 # 还没归类的灵感/素材，定期 review 转正
 ├── templates/             # AGENTS.md 模板 + 副本入口指南（ENTRY.md）+ 项目笔记模板（PROJECT-NOTES.md）
 ├── tests/                 # 端到端冒烟测试（smoke.sh + smoke.ps1）
-└── scripts/               # 安装/更新/验证/卸载/迁移脚本（sh + ps1 双份；agent 清单在 agents.conf）
+├── scripts/               # 安装/更新/验证/卸载/迁移脚本（sh + ps1 双份；agent 清单在 agents.conf）
+├── .codex-plugin/         # Codex 插件清单（plugin.json）
+├── .claude-plugin/        # Claude Code 插件清单 + marketplace
+├── .agents/plugins/       # Codex repo marketplace
+├── VERSION                # 版本号唯一来源；bump-version.sh 同步到插件清单
+└── CHANGELOG.md           # 更新日志
 ```
 
 install 之后，你的项目里会多出这些（默认副本模式）：
@@ -188,6 +193,42 @@ your-project/
 | 还没想好归哪 | `inbox/` | 稍后再整理 |
 
 > 注意：项目副本里的 `global/`、`languages/`、`skills/`、`personal/` 是规则库的**拷贝**，在项目里改不会同步回规则库。跨项目通用的沉淀请去规则库本体改，再 `update.sh` 刷副本；项目专属内容写在 `.vibe-rules/project/README.md`，它属于项目，不会被覆盖。
+
+## 三种用法：规则库 / 插件 / skill
+
+同一份内容有三条接入路径，按需要选，不冲突：
+
+| 路径 | 给谁用 | 怎么接 | 说明 |
+|---|---|---|---|
+| **规则库副本**（默认） | 所有 agent、任何 IDE | `scripts/install.sh <项目>` | 规则副本进项目 `.vibe-rules/`，clone 就能用，跟 agent 无关 |
+| **插件 / 原生 skill**（可选） | Codex、Claude Code | 把本仓库当插件包安装 | 10 个 skill 变成原生 skill，可用 `$code-review` 点名，也能被自动选中 |
+| **IDE 原生规则入口** | Cursor / Qoder / Trae / CodeBuddy / Windsurf / Copilot | 同上 `install.sh`，按 `scripts/agents.conf` 建入口 | 入口是薄壳，真正内容始终只有一份 |
+
+因为 `AGENTS.md` 那条路径对所有 agent 都成立，**不装插件也不影响使用**。
+插件是给"想让 skill 出现在 agent 的 skill 列表里、能 `$name` 直接点名"的场景。
+
+### 作为 Codex / Claude Code 插件安装（可选）
+
+仓库本身就是标准插件包，清单和 skill 元数据都在：
+
+```
+.codex-plugin/plugin.json        # Codex 插件清单（skills 指向 ./skills/）
+.agents/plugins/marketplace.json # Codex repo marketplace（本仓库内即可发现）
+.claude-plugin/plugin.json       # Claude Code 插件清单
+.claude-plugin/marketplace.json  # Claude Code marketplace
+skills/<name>/agents/openai.yaml # 每个 skill 的 UI 元数据 + 默认提示词
+```
+
+在 Codex 里把这个仓库加为 marketplace / 安装插件后，10 个 skill 以 `vibe-rules` 命名空间出现。
+skill 的 `description` 决定它什么时候被自动加载；要强制走某个流程时直接点名：
+
+```
+$code-review    # 交付前自审
+$brainstorming  # 动手前先聊清需求
+$handoff        # 会话快满，写交接文档
+```
+
+改了 skill 列表后跑一次 `scripts/sync-plugin-skills.sh`，插件清单会自动跟上，不用手改 JSON。
 
 ## 项目间迁移
 
@@ -276,6 +317,9 @@ CI（`.github/workflows/smoke.yml`）会跑三档：
 - **踩坑立刻记**：`global/anti-patterns.md` 追加一条
 - **看到好东西**：扔 `inbox/`，定期 review 转正
 - **项目特殊约定**：写到项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式）
+- **加了新 skill**：跑 `scripts/sync-plugin-skills.sh`，让插件清单跟上
+- **发版**：跑 `scripts/bump-version.sh 1.1.0`，同步 `VERSION`、插件清单和 `CHANGELOG.md`
+- **提交前自检**：`scripts/validate-package.sh` + `tests/smoke.sh`
 - **改了就 commit**
 
 ---

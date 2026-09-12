@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "交付前自审一遍"
+  default_prompt: "Use $code-review to review the code you just wrote before delivery."

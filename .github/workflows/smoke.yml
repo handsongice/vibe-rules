@@ -23,6 +23,9 @@ jobs:
           bash --version | head -n 1
           uname -a
 
+      - name: 打包校验（skill 结构 / 清单一致 / 版本同步）
+        run: bash scripts/validate-package.sh
+
       - name: 端到端冒烟测试
         run: bash tests/smoke.sh
 

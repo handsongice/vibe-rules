@@ -1,14 +1,8 @@
 ---
 name: plain-writing
 description: 写技术文档/README/PR 描述/博客时，去掉 AI 写作味，写得像人话
-when_to_use:
-  - agent 帮你写 README、技术文档、博客、PR 描述、release notes
-  - 审一段文字觉得"读起来像 AI 写的"
-  - 写 commit message 时（commit 本来就短，这个 skill 主要帮你写得干脆）
-not_for:
-  - 代码本身（变量名、函数名按代码规范，不按这个）
-  - 聊天对话（聊天不需要"去 AI 味"）
-  - 代码注释（注释按代码规范，简洁即可）
+metadata:
+  short-description: 技术文档去 AI 味
 ---
 
 # 去 AI 味写作

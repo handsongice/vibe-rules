@@ -128,8 +128,15 @@ if ($evidence) {
 }
 
 # ---------- 规则副本（保留 project\ 项目笔记） ----------
-if (Test-Path ".vibe-rules" -PathType Container) {
-    foreach ($sub in @("global", "languages", "skills", "personal", "project")) {
+if ((Test-Path ".vibe-rules" -PathType Container) -and $PurgeProject) {
+    Remove-Item ".vibe-rules" -Recurse -Force
+    Write-Host "  ✅ 删除 .vibe-rules\（含 project\ 项目笔记，-PurgeProject）"
+    $script:removed++
+}
+elseif (Test-Path ".vibe-rules" -PathType Container) {
+    # 旧版曾把打包产物复制进副本，一并清掉
+    foreach ($sub in @("global", "languages", "skills", "personal", "project",
+                       ".agents", ".claude-plugin", ".codex-plugin")) {
         $subPath = ".vibe-rules\$sub"
         if (-not (Test-Path $subPath)) { continue }
         if ($sub -eq "project" -and -not $PurgeProject) {
@@ -140,13 +147,19 @@ if (Test-Path ".vibe-rules" -PathType Container) {
         Write-Host "  ✅ 删除 .vibe-rules\$sub\"
         $script:removed++
     }
-    foreach ($f in @("README.md", "LICENSE", ".gitignore", "VERSION", "AGENTS.md", "installed")) {
+    foreach ($f in @("README.md", "LICENSE", ".gitignore", "VERSION", "CHANGELOG.md",
+                     ".gitattributes", "AGENTS.md", "installed")) {
         $fp = ".vibe-rules\$f"
         if (Test-Path $fp) {
             Remove-Item $fp -Force
             Write-Host "  ✅ 删除 .vibe-rules\$f"
             $script:removed++
         }
+    }
+    # pwsh 运行时缓存（旧版可能被复制进副本）也一并清掉
+    foreach ($pat in @("ModuleAnalysisCache*", "StartupProfileData*")) {
+        Get-ChildItem -Path ".vibe-rules" -Filter $pat -Force -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
     if (-not (Get-ChildItem ".vibe-rules" -Force | Select-Object -First 1)) {
         Remove-Item ".vibe-rules" -Force -ErrorAction SilentlyContinue
