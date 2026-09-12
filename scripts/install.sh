@@ -99,9 +99,9 @@ link "AGENTS.md" ".windsurfrules"        # Windsurf（旧版）
 link "AGENTS.md" ".clinerules"           # Cline
 link "AGENTS.md" ".roorules"             # Roo Code（旧版）
 
-# GitHub Copilot（在 .github/ 下）
+# GitHub Copilot（在 .github/ 下，symlink 要指向上级）
 mkdir -p .github
-link "AGENTS.md" ".github/copilot-instructions.md"
+link "../AGENTS.md" ".github/copilot-instructions.md"
 
 # —— 目录型：写 wrapper 文件 ——
 # 这些 agent 读目录下的规则文件，建一个 wrapper 告诉它们读 AGENTS.md
@@ -116,8 +116,38 @@ write_wrapper ".roo/rules/00-project-entry.md" "项目入口规则，始终加�
 write_wrapper ".kiro/steering/00-project-entry.md" "项目入口规则，始终加载"     # Kiro
 write_wrapper ".amazonq/rules/00-project-entry.md" "项目入口规则，始终加载"     # Amazon Q
 
+# —— 证据：写标记文件，证明这个项目接入了规则库 ——
+# 项目根写 .vibe-rules，记录规则库路径和版本
+VIBE_VERSION="$(cd "$VIBE_HOME" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+VIBE_DATE="$(date +%Y-%m-%d)"
+
+cat > "$PROJECT_ROOT/.vibe-rules" <<EOF
+# 这个项目已接入 vibe-rules 规则库
+# 证据文件，可随时检查
+rules_home=$VIBE_HOME
+rules_version=$VIBE_VERSION
+installed_at=$VIBE_DATE
+EOF
+echo "  ✅ .vibe-rules（证据文件，记录规则库版本和安装时间）"
+
+# 规则库 projects/ 下写注册记录（双向留痕）
+SLUG="$(basename "$PROJECT_ROOT")"
+PROJECT_SPECIFIC="$VIBE_HOME/projects/$SLUG"
+mkdir -p "$PROJECT_SPECIFIC"
+cat > "$PROJECT_SPECIFIC/registered-at.txt" <<EOF
+project_path=$PROJECT_ROOT
+installed_at=$VIBE_DATE
+rules_version=$VIBE_VERSION
+EOF
+echo "  ✅ 规则库 projects/$SLUG/ 已留注册记录"
+
 echo ""
 echo "🎉 完成。已为以下 agent 创建入口文件："
 echo "   Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, Roo Code,"
 echo "   Continue, Aider, Gemini CLI, Trae, Qoder, CodeBuddy, Kiro, Amazon Q"
-echo "   规则库挪了位置？重新跑一次本脚本即可。"
+echo ""
+echo "📋 证据链："
+echo "   1. 项目根 .vibe-rules 文件（规则库路径 + 版本 + 时间）"
+echo "   2. 项目根 CLAUDE.md / .cursorrules 等 symlink"
+echo "   3. 规则库 projects/$SLUG/ 注册记录"
+echo "   4. 验证命令：$VIBE_HOME/scripts/verify.sh $PROJECT_ROOT"
