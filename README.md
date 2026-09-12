@@ -54,6 +54,7 @@
 - `skills/pre-commit-check/` —— commit 前必跑项
 - `skills/handoff/` —— 换 agent / 新开会话前写交接文档
 - `skills/frontend-taste/` —— 做落地页/营销页时避免 AI 塑料感（不用于后台/dashboard）
+- `skills/plain-writing/` —— 写 README/文档/PR/博客时去 AI 味，写得像人话
 
 ### 项目专属（`projects/<project-slug>/`）
 - 每个项目一个子目录，记录该项目的架构、特殊约定、历史坑。

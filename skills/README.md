@@ -76,3 +76,6 @@ applies_to: [java, python, nodejs, vue, react]  # 或 all
 
 **前端视觉：**
 - `frontend-taste/` —— 做落地页/作品集/营销页时，避免 AI 塑料感（黑名单 + 自检表）
+
+**文字表达：**
+- `plain-writing/` —— 写 README/技术文档/PR/博客时去 AI 味，写得像人话
