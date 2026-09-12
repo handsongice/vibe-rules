@@ -92,7 +92,7 @@ echo "🔗 创建入口文件..."
 link() {
   local target="$1" linkpath="$2"
   if [ -e "$linkpath" ] && [ ! -L "$linkpath" ]; then
-    echo "  ⚠️  跳过 $linkpath（已存在）"
+    echo "  ⚠️  跳过 ${linkpath}（已存在）"
     return
   fi
   rm -f "$linkpath"
@@ -105,7 +105,7 @@ write_wrapper() {
   local dir; dir="$(dirname "$path")"
   mkdir -p "$dir"
   if [ -e "$path" ] && [ ! -L "$path" ]; then
-    echo "  ⚠️  跳过 $path（已存在）"
+    echo "  ⚠️  跳过 ${path}（已存在）"
     return
   fi
   rm -f "$path"
