@@ -2,78 +2,133 @@
 # install.sh —— 在你的开发项目里接入 vibe-rules
 #
 # 用法：
-#   /path/to/vibe-rules/scripts/install.sh /path/to/your-project
+#   /path/to/vibe-rules/scripts/install.sh [项目路径]
 #
-# 规则库放哪都行，脚本会自动定位。项目里的入口文件会写入
-# 规则库的实际绝对路径。规则库挪了位置？重新跑一次本脚本。
-#
-# 幂等：可重复运行。不会覆盖你已有的真实文件。
+# 交互式：列出所有支持的 agent，你选哪个就生成哪个入口文件。
+# 加 --all 参数直接生成全部（老用户批量接入用）。
 
 set -euo pipefail
 
-# 从脚本位置反推规则库根目录（scripts/ 的上一级）
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
-
-# 项目根目录：第一个参数，否则当前目录
 PROJECT_ROOT="${1:-$(pwd)}"
 
-# 安全检查：目录不存在就自动创建
+# 支持的 agent 列表：编号 | 名称 | 类型 | 文件/目录 | 说明
+AGENTS=(
+  "1|Claude Code|single|CLAUDE.md|根目录 CLAUDE.md"
+  "2|Cursor|single|.cursorrules|根目录 .cursorrules（旧版）"
+  "3|Cursor（新版规则）|dir|.cursor/rules/.mdc|.cursor/rules/ 目录"
+  "4|Windsurf|single|.windsurfrules|根目录 .windsurfrules"
+  "5|GitHub Copilot|single|.github/copilot-instructions.md|.github/ 下"
+  "6|Cline|single|.clinerules|根目录 .clinerules"
+  "7|Roo Code|single|.roorules|根目录 .roorules"
+  "8|Aider|single|CONVENTIONS.md|根目录 CONVENTIONS.md"
+  "9|Gemini CLI|single|GEMINI.md|根目录 GEMINI.md"
+  "10|Trae|dir|.trae/rules/.md|.trae/rules/ 目录"
+  "11|Qoder|dir|.qoder/rules/.md|.qoder/rules/ 目录"
+  "12|CodeBuddy|single|CODEBUDDY.md|根目录 CODEBUDDY.md"
+  "13|Continue|dir|.continue/rules/.md|.continue/rules/ 目录"
+  "14|Kiro|dir|.kiro/steering/.md|.kiro/steering/ 目录"
+  "15|Amazon Q|dir|.amazonq/rules/.md|.amazonq/rules/ 目录"
+)
+
+# 解析参数
+ALL_MODE=false
+if [ "$PROJECT_ROOT" = "--all" ]; then
+  ALL_MODE=true
+  PROJECT_ROOT="${1:-$(pwd)}"
+fi
+
+# 目录不存在就创建
 if [ ! -d "$PROJECT_ROOT" ]; then
   echo "📁 目录不存在，自动创建：$PROJECT_ROOT"
   mkdir -p "$PROJECT_ROOT"
 fi
-
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
-echo "📦 规则库位置：$VIBE_HOME"
-echo "🎯 目标项目：$PROJECT_ROOT"
+echo "📦 规则库：$VIBE_HOME"
+echo "🎯 项目：$PROJECT_ROOT"
+echo ""
 
-if [ ! -f "$VIBE_HOME/README.md" ] || [ ! -d "$VIBE_HOME/global" ]; then
-  echo "❌ $VIBE_HOME 看起来不像 vibe-rules 目录"
-  exit 1
-fi
-
-# —— AGENTS.md：没有就从模板生成 ——
+# AGENTS.md（基础文件，总是生成）
 AGENTS_FILE="$PROJECT_ROOT/AGENTS.md"
-
 if [ ! -f "$AGENTS_FILE" ]; then
   sed "s|~/\.vibe|$VIBE_HOME|g" "$VIBE_HOME/templates/AGENTS.md" > "$AGENTS_FILE"
-  echo "📝 生成 ${AGENTS_FILE}（已写入规则库实际路径，记得填项目信息）"
+  echo "📝 生成 AGENTS.md"
 else
-  echo "ℹ️  ${AGENTS_FILE} 已存在，保留不动"
+  echo "ℹ️  AGENTS.md 已存在"
 fi
 
 cd "$PROJECT_ROOT"
-echo "🔗 创建 agent 入口文件..."
 
-# —— 工具函数 ——
+# 交互选择 agent
+if [ "$ALL_MODE" = true ]; then
+  SELECTION="all"
+else
+  echo "你用哪个 agent？输入编号（空格分隔多选），或输入 all 全选："
+  echo ""
+  for entry in "${AGENTS[@]}"; do
+    IFS='|' read -r num name type path desc <<< "$entry"
+    printf "  %2s. %-20s (%s)\n" "$num" "$name" "$desc"
+  done
+  echo ""
+  read -r -p "选择: " SELECTION
+fi
 
-# 建 symlink，保护已有真实文件
+# 解析选择
+SELECTED_NUMS=""
+if [ "$SELECTION" = "all" ]; then
+  for entry in "${AGENTS[@]}"; do
+    IFS='|' read -r num name type path desc <<< "$entry"
+    SELECTED_NUMS="$SELECTED_NUMS $num"
+  done
+else
+  SELECTED_NUMS=" $SELECTION "
+fi
+# 确保结尾也有空格，方便 case 匹配
+SELECTED_NUMS="$SELECTED_NUMS "
+
+echo ""
+echo "🔗 创建入口文件..."
+
+# 工具函数
 link() {
-  local target="$1"
-  local linkpath="$2"
+  local target="$1" linkpath="$2"
   if [ -e "$linkpath" ] && [ ! -L "$linkpath" ]; then
-    echo "  ⚠️  跳过 $linkpath（已存在真实文件）"
+    echo "  ⚠️  跳过 $linkpath（已存在）"
     return
   fi
   rm -f "$linkpath"
   ln -s "$target" "$linkpath"
-  echo "  ✅ $linkpath -> $target"
+  echo "  ✅ $linkpath"
 }
 
-# 目录型 rules：写一个 wrapper 文件，告诉 agent 读 AGENTS.md 和规则库
 write_wrapper() {
-  local path="$1"
-  local note="$2"
-  local dir
-  dir="$(dirname "$path")"
+  local path="$1" note="$2"
+  local dir; dir="$(dirname "$path")"
   mkdir -p "$dir"
   if [ -e "$path" ] && [ ! -L "$path" ]; then
-    echo "  ⚠️  跳过 $path（已存在真实文件）"
+    echo "  ⚠️  跳过 $path（已存在）"
     return
   fi
   rm -f "$path"
-  cat > "$path" <<EOF
+
+  # 根据文件类型用不同的 frontmatter 格式
+  if [[ "$path" == *.mdc ]]; then
+    # Cursor .mdc 格式
+    cat > "$path" <<EOF
+---
+description: $note
+alwaysApply: true
+---
+
+# 项目入口
+
+先读项目根目录的 \`AGENTS.md\`，再读规则库 \`$VIBE_HOME/README.md\`。
+不要凭记忆猜测项目约定，按这两个文件里写的来。
+EOF
+  else
+    # Trae / Qoder / Continue 等用 trigger 格式
+    cat > "$path" <<EOF
 ---
 trigger: always_on
 description: $note
@@ -84,70 +139,45 @@ description: $note
 先读项目根目录的 \`AGENTS.md\`，再读规则库 \`$VIBE_HOME/README.md\`。
 不要凭记忆猜测项目约定，按这两个文件里写的来。
 EOF
+  fi
   echo "  ✅ $path"
 }
 
-# —— 单文件型：symlink 指向 AGENTS.md ——
-# 这些 agent 读根目录下的单个文件，建 symlink 就行
+# 根据选择执行
+for entry in "${AGENTS[@]}"; do
+  IFS='|' read -r num name type path desc <<< "$entry"
+  case "$SELECTED_NUMS" in
+    *" $num "*) ;; # 选中了
+    *) continue ;;
+  esac
 
-link "AGENTS.md" "CLAUDE.md"              # Claude Code
-link "AGENTS.md" "CODEBUDDY.md"           # CodeBuddy（旧版单文件）
-link "AGENTS.md" "GEMINI.md"              # Gemini CLI
-link "AGENTS.md" "CONVENTIONS.md"         # Aider
-link "AGENTS.md" ".cursorrules"          # Cursor（旧版）
-link "AGENTS.md" ".windsurfrules"        # Windsurf（旧版）
-link "AGENTS.md" ".clinerules"           # Cline
-link "AGENTS.md" ".roorules"             # Roo Code（旧版）
+  if [ "$type" = "single" ]; then
+    if [ "$path" = ".github/copilot-instructions.md" ]; then
+      mkdir -p .github
+      link "../AGENTS.md" "$path"
+    else
+      link "AGENTS.md" "$path"
+    fi
+  elif [ "$type" = "dir" ]; then
+    # 取目录名，建 wrapper
+    dir_path=$(dirname "$path")
+    fname=$(basename "$path")
+    ext="${fname##*.}"
+    wrapper="$dir_path/00-project-entry.$ext"
+    write_wrapper "$wrapper" "$name 项目入口规则"
+  fi
+done
 
-# GitHub Copilot（在 .github/ 下，symlink 要指向上级）
-mkdir -p .github
-link "../AGENTS.md" ".github/copilot-instructions.md"
-
-# —— 目录型：写 wrapper 文件 ——
-# 这些 agent 读目录下的规则文件，建一个 wrapper 告诉它们读 AGENTS.md
-
-write_wrapper ".cursor/rules/00-project-entry.mdc" "项目入口规则，始终加载"     # Cursor 新版
-write_wrapper ".windsurf/rules/00-project-entry.md" "项目入口规则，始终加载"   # Windsurf 新版
-write_wrapper ".trae/rules/00-project-entry.md" "项目入口规则，始终加载"       # Trae
-write_wrapper ".qoder/rules/00-project-entry.md" "项目入口规则，始终加载"      # Qoder
-write_wrapper ".codebuddy/rules/00-project-entry.md" "项目入口规则，始终加载"  # CodeBuddy 新版
-write_wrapper ".continue/rules/00-project-entry.md" "项目入口规则，始终加载"    # Continue
-write_wrapper ".roo/rules/00-project-entry.md" "项目入口规则，始终加载"        # Roo Code 新版
-write_wrapper ".kiro/steering/00-project-entry.md" "项目入口规则，始终加载"     # Kiro
-write_wrapper ".amazonq/rules/00-project-entry.md" "项目入口规则，始终加载"     # Amazon Q
-
-# —— 证据：写标记文件，证明这个项目接入了规则库 ——
-# 项目根写 .vibe-rules，记录规则库路径和版本
-VIBE_VERSION="$(cd "$VIBE_HOME" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-VIBE_DATE="$(date +%Y-%m-%d)"
-
-cat > "$PROJECT_ROOT/.vibe-rules" <<EOF
-# 这个项目已接入 vibe-rules 规则库
-# 证据文件，可随时检查
+# 证据文件
+VIBE_VERSION="$(cd "$VIBE_HOME" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+cat > ".vibe-rules" <<EOF
 rules_home=$VIBE_HOME
 rules_version=$VIBE_VERSION
-installed_at=$VIBE_DATE
+installed_at=$(date +%Y-%m-%d)
+agents=$(echo $SELECTED_NUMS | tr ' ' ',')
 EOF
-echo "  ✅ .vibe-rules（证据文件，记录规则库版本和安装时间）"
-
-# 规则库 projects/ 下写注册记录（双向留痕）
-SLUG="$(basename "$PROJECT_ROOT")"
-PROJECT_SPECIFIC="$VIBE_HOME/projects/$SLUG"
-mkdir -p "$PROJECT_SPECIFIC"
-cat > "$PROJECT_SPECIFIC/registered-at.txt" <<EOF
-project_path=$PROJECT_ROOT
-installed_at=$VIBE_DATE
-rules_version=$VIBE_VERSION
-EOF
-echo "  ✅ 规则库 projects/$SLUG/ 已留注册记录"
+echo "  ✅ .vibe-rules（证据文件）"
 
 echo ""
-echo "🎉 完成。已为以下 agent 创建入口文件："
-echo "   Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, Roo Code,"
-echo "   Continue, Aider, Gemini CLI, Trae, Qoder, CodeBuddy, Kiro, Amazon Q"
-echo ""
-echo "📋 证据链："
-echo "   1. 项目根 .vibe-rules 文件（规则库路径 + 版本 + 时间）"
-echo "   2. 项目根 CLAUDE.md / .cursorrules 等 symlink"
-echo "   3. 规则库 projects/$SLUG/ 注册记录"
-echo "   4. 验证命令：$VIBE_HOME/scripts/verify.sh $PROJECT_ROOT"
+echo "🎉 完成。"
+echo "   验证：$VIBE_HOME/scripts/verify.sh $PROJECT_ROOT"
