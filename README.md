@@ -28,6 +28,7 @@
 
 ### 通用（`global/`）
 - `global/iron-rules.md` —— 本文件 §2 的展开版与例外情况
+- `global/coding-principles.md` —— **四条行为原则**（想清楚再写/简单优先/外科手术式改动/目标驱动），动手前必读
 - `global/git-workflow.md` —— 分支、commit message、PR 规范
 - `global/testing.md` —— 测试要求与最低标准
 - `global/security.md` —— 输入校验、依赖、密钥、常见漏洞
