@@ -5,6 +5,40 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-13
+
+主题：**把"策略"从文档约定变成脚本强制**，并补上规格驱动的文档位置与提交前自检。
+
+### 新增
+
+- **策略档位 `--profile team|personal`**（PowerShell：`-Profile`）——把"规则进不进仓库、个人层带不带"
+  从 README 里的口头约定收进脚本，安装时记进证据文件（`profile=`）：
+  - `team`：强制自包含副本 + 不含 `personal/`；装完自查 `.gitignore` 有没有把 `.vibe-rules/` 排除掉，排除了就报警
+  - `personal`：强制外链模式（规则不落进仓库），个人层照常带上
+  - 与 `--link` / `--no-personal` 冲突时直接报错退出，不猜用户意图
+- `update.sh` / `update.ps1`：沿用证据文件里的档位；显式传 `--link` / `--no-personal` / `--profile` 可覆盖
+- `verify.sh` / `verify.ps1`：按档位校验——team 档查"副本不含 `personal/` 且没被 `.gitignore` 排除"，
+  personal 档查"规则没落进项目"；旧证据文件缺 `profile=` 时按 `default` 处理，不误报
+- **项目文档约定（规格驱动）**：install 在项目里建 `docs/specs/README.md` 与 `docs/plans/README.md`
+  （只在不存在时建档、永不覆盖），AGENTS.md 引用块新增第 7 条指向这两个位置
+- `scripts/preflight.sh`：一条命令跑完打包校验 + 清单同步检查 + bash 冒烟 + pwsh 冒烟（没装 pwsh 自动跳过）
+- `.pre-commit-config.yaml`：提交前自动跑 `bash -n`、`validate-package.sh`、`sync-plugin-skills.sh --check`、`tests/smoke.sh`
+  （纯 `repo: local` hook，不联网、不依赖第三方 hook 仓库）
+- `RELEASE-NOTES.md`：面向使用者的发布说明（改了什么、要做什么、有没有破坏性变更）
+- `templates/DOCS-SPECS.md` / `templates/DOCS-PLANS.md`：把散在 skill 里的文档位置约定固化成项目内模板
+  （结构模板 + 自审清单），install 建档时直接落这两份说明
+
+### 变更
+
+- `install.sh` / `update.sh --help` 改为打印整段注释头（不再写死行号，以后加选项不会漏）
+- `templates/ENTRY.md`：补两种策略档位对照表、`docs/` 说明；卸载说明明确保留 `docs/`
+
+### 升级注意（行为变化）
+
+- `install.sh` / `install.ps1` 现在会在项目里创建 `docs/specs/`、`docs/plans/` 两个目录及其 `README.md`：
+  **已存在的文件绝不覆盖**；不想要可以直接删（下次 install 会在缺失时重建）；`--link` 外链模式不建
+- 证据文件新增一行 `profile=`；老项目没有这一行时一律按 `default` 走，verify 不会因此报错
+
 ## [1.0.0] - 2026-09-12
 
 ### 新增

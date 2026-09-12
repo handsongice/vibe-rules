@@ -1,0 +1,40 @@
+# .pre-commit-config.yaml —— 提交前自动跑本地检查（可选，装过 pre-commit 才生效）
+#
+#   pipx install pre-commit     # 或 pip install pre-commit
+#   pre-commit install          # 挂进 .git/hooks/pre-commit
+#   pre-commit run --all-files  # 手动全跑一遍
+#
+# 全部是本地 hook（repo: local），不联网、不依赖任何第三方 hook 仓库。
+# 一条命令全跑的等价入口：bash scripts/preflight.sh
+# pwsh 那一档冒烟只在 CI（Windows）跑——本机没装 pwsh 时不在这里赌环境。
+
+repos:
+  - repo: local
+    hooks:
+      - id: vibe-rules-syntax
+        name: bash -n（shell 脚本语法）
+        entry: bash -c 'for f in scripts/*.sh tests/*.sh; do bash -n "$f" || exit 1; done'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: vibe-rules-validate-package
+        name: validate-package（skill 结构 + 插件清单 + 版本一致）
+        entry: bash scripts/validate-package.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: vibe-rules-skills-sync
+        name: sync-plugin-skills --check（插件清单没漂移）
+        entry: bash scripts/sync-plugin-skills.sh --check
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: vibe-rules-smoke
+        name: smoke（端到端冒烟，bash）
+        entry: bash tests/smoke.sh
+        language: system
+        pass_filenames: false
+        always_run: true
