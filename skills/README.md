@@ -24,8 +24,10 @@ skills/<skill-name>/
 
 ```markdown
 ---
+# name 和 description 必填：description 要写清"什么时候用"，agent 靠它决定加不加载
 name: <skill-name>
 description: <一句话说明什么时候该用这个 skill>
+# 以下两个可选，现有 skill 也不统一，按需写：
 when_to_use:
   - <触发场景 1>
   - <触发场景 2>

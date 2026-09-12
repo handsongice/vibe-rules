@@ -1,6 +1,6 @@
 # Vibe Rules
 
-> 给所有 coding agent 共用的个人开发宪法。一份 markdown，跨 Qoder / Codex / Claude Code / Cursor / Trae / CodeBuddy / pi / Hermes / Gemini / Windsurf / Copilot。
+> 给所有 coding agent 共用的个人开发宪法。一份 markdown，跨 Codex / Claude Code / Cursor / Qoder / Trae / CodeBuddy / Hermes / Kimi Code / DeepSeek Harness / Windsurf / Copilot。
 
 你在 AI 辅助编程时有没有遇到过这些：
 
@@ -10,7 +10,7 @@
 - 文档/PR/commit 写出来一股 AI 味（"赋能""助力""打造闭环"）
 - 前端做出来一眼假：AI 紫渐变、Inter 字体、三个等大 card
 
-**Vibe Rules 解决这些问题。** 它是一份放在 `~/.vibe/` 的 markdown 规则库，项目开始时所有 agent 自动读，把你的开发习惯、踩坑记录、审美偏好固定下来，不再每次重新教。
+**Vibe Rules 解决这些问题。** 它是一份放在任意路径的 markdown 规则库（脚本会自动定位并记住位置），项目开始时所有 agent 自动读，把你的开发习惯、踩坑记录、审美偏好固定下来，不再每次重新教。
 
 ## 它能做什么
 
@@ -19,7 +19,7 @@
 | **六条铁律** | 不确定就问、改前读懂、改完自验、不擅自重构、不泄露密钥、context 快满先交接 |
 | **四原则** | 想清楚再写、简单优先（含 Ponytail 七步决策梯子）、外科手术式改动、目标驱动 |
 | **技术栈规范** | Java 全家桶 / Python / Node.js / Vue / React 各自的约定 |
-| **9 个可复用 skill** | 需求澄清、写计划、TDD、系统调试、线上排查、code review、commit 前检查、跨会话交接、反 AI 塑料感前端、去 AI 味写作 |
+| **10 个可复用 skill** | 需求澄清、写计划、TDD、系统调试、线上排查、code review、commit 前检查、跨会话交接、反 AI 塑料感前端、去 AI 味写作 |
 | **踩坑库** | 每次被 agent 坑过就记一条，新项目开工前扫一眼 |
 | **项目专属层** | 每个项目自己的架构决策和历史坑，和通用规则分开 |
 
@@ -52,45 +52,65 @@ pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
 ```
 
 > Windows 上建 symlink 需要管理员权限或开启开发者模式。脚本会自动降级为复制文件，效果一样。
+>
+> PS 脚本的 `-Help`（等价于 sh 版的 `--help`）可以查看参数；`-Yes` 非交互，`-AgentNums 1,4,7` 选 agent，
+> `-Copy` 强制复制模式。
 
 完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。
 
 规则库放哪都行，脚本会自动定位。挪了位置？重新跑一次 install 就行。
 
+### 常用参数（install / new-project 通用）
+
+```bash
+scripts/install.sh <项目路径> [选项]
+
+  --all            给 12 个 agent 全部建入口
+  --agents 1,4,7   只装指定编号的 agent（编号见“支持的 agent”一节，装完记在项目 .vibe-rules 里）
+  --copy           用复制文件代替 symlink（symlink 被 Windows/Git 限制时用）
+  --yes            非交互（不带 --agents 时等价于 --all，CI / 批量接入用）
+  --help           查看全部参数
+```
+
+不带任何选项时是交互式的：列出 12 个 agent，你输入编号或 `all`。
+
+只装了 4 个 agent 也没关系：`verify` 只校验你装过的那些，不会拿没装的报错。换机器或挪了规则库，
+重跑一次 install 就会自动刷新路径。
+
 ## 支持的 agent
 
 每个 agent 的入口文件都来自官方文档，不是猜的。
 
+编号就是 `--agents` 要填的数字（唯一数据源：`scripts/agents.conf`，所有脚本都读它，不需要改代码）。
+
 ### 原生读 AGENTS.md（无需额外文件）
 
-| Agent | 说明 | 出处 |
-|---|---|---|
-| Codex CLI | 根目录 AGENTS.md | https://github.com/openai/codex |
-| Hermes | 根目录 AGENTS.md | https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files |
-| Kimi Code | 根目录 AGENTS.md | https://moonshotai.github.io/kimi-code/en/customization/agents |
-| DeepSeek Harness | 根目录 AGENTS.md | https://github.com/deepseek-ai/deepseek-harness |
+| 编号 | Agent | 说明 | 出处 |
+|---|---|---|---|
+| 2 | Codex CLI | 根目录 AGENTS.md | https://github.com/openai/codex |
+| 8 | Hermes | 根目录 AGENTS.md | https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files |
+| 9 | Kimi Code | 根目录 AGENTS.md | https://moonshotai.github.io/kimi-code/en/customization/agents |
+| 10 | DeepSeek Harness | 根目录 AGENTS.md | https://github.com/deepseek-ai/deepseek-harness |
 
 ### 单文件型（symlink 指向 AGENTS.md）
 
-| Agent | 入口文件 | 出处 |
-|---|---|---|
-| Claude Code | `CLAUDE.md` | https://docs.anthropic.com/claude-code |
-| Cursor | `.cursorrules` | https://cursor.com/help/customization/rules |
-| Windsurf | `.windsurfrules` | https://docs.windsurf.com/windsurf/cascade/rules |
-| GitHub Copilot | `.github/copilot-instructions.md` | https://docs.github.com/en/copilot |
+| 编号 | Agent | 入口文件 | 出处 |
+|---|---|---|---|
+| 1 | Claude Code | `CLAUDE.md` | https://docs.anthropic.com/claude-code |
+| 3 | Cursor | `.cursorrules` | https://cursor.com/help/customization/rules |
+| 11 | Windsurf | `.windsurfrules` | https://docs.windsurf.com/windsurf/cascade/rules |
+| 12 | GitHub Copilot | `.github/copilot-instructions.md` | https://docs.github.com/en/copilot |
 
 ### 目录型（wrapper 文件）
 
-| Agent | 路径 | 出处 |
-|---|---|---|
-| Cursor（新版） | `.cursor/rules/00-project-entry.mdc` | https://cursor.com/help/customization/rules |
-| Qoder | `.qoder/rules/00-project-entry.md` | https://qoder.mintlify.app/user-guide/rules |
-| Trae | `.trae/rules/00-project-entry.md` | https://docs.trae.cn/ide/rules |
-| CodeBuddy | `.codebuddy/rules/project-entry/RULE.mdc` | https://www.codebuddy.cn/docs/ide/User-guide/Rules |
+| 编号 | Agent | 路径 | 出处 |
+|---|---|---|---|
+| 4 | Cursor（新版） | `.cursor/rules/00-project-entry.mdc` | https://cursor.com/help/customization/rules |
+| 5 | Qoder | `.qoder/rules/00-project-entry.md` | https://qoder.mintlify.app/user-guide/rules |
+| 6 | Trae | `.trae/rules/00-project-entry.md` | https://docs.trae.cn/ide/rules |
+| 7 | CodeBuddy | `.codebuddy/rules/project-entry/RULE.mdc` | https://www.codebuddy.cn/docs/ide/User-guide/Rules |
 
-**换工具不用重配**：今天用 Cursor，明天换 Qoder，后天换 Claude Code，规则都在。
-
-**换工具不用重配**：今天用 Cursor，明天换 Trae，后天换 Claude Code，规则都在。脚本建的入口文件是幂等的，随时可重跑。
+**换工具不用重配**：今天用 Cursor，明天换 Qoder，后天换 Claude Code，规则都在。脚本建的入口文件是幂等的，随时可重跑。
 
 ## 目录结构
 
@@ -114,7 +134,10 @@ vibe-rules/（你 clone 到的任意路径）
 ├── skills/                # 可复用工作流（你自己加的也放这）
 ├── projects/              # 项目专属沉淀
 │   └── <项目名>/          # 每个项目一个目录
-└── scripts/               # 安装/迁移/验证脚本
+├── inbox/                 # 还没归类的灵感/素材，定期 review 转正
+├── templates/AGENTS.md    # 新项目的 AGENTS.md 模板
+├── tests/                 # 端到端冒烟测试（smoke.sh + smoke.ps1）
+└── scripts/               # 安装/迁移/验证脚本（sh + ps1 双份）
 ```
 
 ## 日常怎么沉淀
@@ -161,12 +184,32 @@ pwsh C:\path\to\vibe-rules\scripts\migrate.ps1 旧项目slug 新项目slug
 ```powershell
 pwsh C:\path\to\vibe-rules\scripts\verify.ps1 C:\path\to\project
 ```
-├── templates/AGENTS.md     # 新项目模板
-├── scripts/
-│   ├── install.sh         # 幂等 symlink 分发
-│   └── new-project.sh     # 新项目初始化
-└── inbox/                 # 看到的好东西先扔这里
+
+## 改了脚本先跑冒烟测试
+
+这个库的安装/卸载/迁移是端到端的，改脚本前先跑一遍：
+
+**macOS / Linux：**
+```bash
+bash tests/smoke.sh          # bash 版；Windows 上可用 Git Bash 跑
 ```
+
+**Windows（PowerShell）：**
+```powershell
+pwsh tests\smoke.ps1
+```
+
+它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
+空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径，bash 版目前 58 项断言（会随测试增长），
+PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
+
+CI（`.github/workflows/smoke.yml`）会跑三档：
+
+| 环境 | 为什么 |
+|---|---|
+| Ubuntu + bash 5 | Linux 主路径 |
+| macOS + 系统自带 bash 3.2 | 拦过 `$var` 后面跟全角字符导致 `unbound variable` 那类崩溃 |
+| Windows + pwsh | PowerShell 脚本（symlink 权限、`../AGENTS.md` 相对路径这些只在 Windows 才真出问题） |
 
 ## 致谢
 
@@ -246,7 +289,7 @@ pwsh C:\path\to\vibe-rules\scripts\verify.ps1 C:\path\to\project
 - 用中文和用户交流，代码和命令保留原文
 - 回复先给结论/方案，再给理由
 - 多步操作先说计划再动手
-- 不确定本库是否已有规则时，用 Grep/Glob 搜 `~/.vibe/`
+- 不确定本库是否已有规则时，用 Grep/Glob 搜规则库根目录（位置见 `AGENTS.md` 顶部的 vibe-rules 引用块）
 
 ## License
 
