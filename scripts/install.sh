@@ -21,7 +21,7 @@ AGENTS=(
   "4|Cursor（新版规则）|dir|.cursor/rules/.mdc|.cursor/rules/ 目录"
   "5|Qoder|dir|.qoder/rules/.md|.qoder/rules/ 目录"
   "6|Trae|dir|.trae/rules/.md|.trae/rules/ 目录"
-  "7|CodeBuddy|single|CODEBUDDY.md|根目录 CODEBUDDY.md"
+  "7|CodeBuddy|dir|.codebuddy/rules/.md|.codebuddy/rules/ 目录"
   "8|Hermes|dir|.hermes/rules/.md|.hermes/rules/ 目录"
   "9|Kimi Code|dir|.kimi/rules/.md|.kimi/rules/ 目录"
   "10|DeepSeek Harness|dir|.dsh/rules/.md|.dsh/rules/ 目录"
