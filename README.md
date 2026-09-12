@@ -247,7 +247,7 @@ pwsh tests\smoke.ps1
 它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
 空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
-`--purge-project` 删项目笔记。bash 版目前 85 项断言（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
+`--purge-project` 删项目笔记。bash 版目前 93 项断言（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
 
 CI（`.github/workflows/smoke.yml`）会跑三档：
 

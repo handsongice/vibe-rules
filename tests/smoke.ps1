@@ -162,7 +162,7 @@ try {
     $code = Run-Script $Install @($P8, "-AgentNums", "2", "-Link", "-Yes")
     Check "install -Link 退出码 0" { $code -eq 0 }
     Check "证据文件记录 mode=link" { (Raw (Join-Path $P8 ".vibe-rules")).Contains("mode=link") }
-    Check "引用块指向本机规则库" { (Raw (Join-Path $P8 "AGENTS.md")).Contains($R1) }
+    Check "引用块指向本机规则库" { (Raw (Join-Path $P8 "AGENTS.md")).Contains(($R1 -replace '\\', '/')) }
     Refute "link 模式不建副本" { Test-Path (Join-Path $P8 ".vibe-rules/global") }
     Check "verify 通过" { (Run-Script $Verify @($P8)) -eq 0 }
 

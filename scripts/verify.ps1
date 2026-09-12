@@ -124,7 +124,8 @@ if (Test-Path "AGENTS.md") {
             if ($agentsMd.Contains(".vibe-rules/README.md")) { Ok "引用块指向项目内副本（.vibe-rules/）" }
             else { Bad "引用块不是指向项目内副本（重跑 install.ps1 刷新）" }
         } else {
-            if ($rulesHome -and $agentsMd.Contains($rulesHome)) { Ok "引用块指向当前规则库路径" }
+            $rulesHomeFwd = $rulesHome -replace '\\', '/'
+            if ($rulesHome -and ($agentsMd.Contains($rulesHome) -or $agentsMd.Contains($rulesHomeFwd))) { Ok "引用块指向当前规则库路径" }
             else { Bad "引用块里的规则库路径不是当前路径（重跑 install.ps1 即可刷新）" }
         }
     } else {
