@@ -124,6 +124,20 @@ for p in manifests[:2]:
     else:
         blow(f"{p} 版本 {data.get('version')!r} 与 VERSION {version!r} 不一致")
 
+codex_manifest = json.loads((root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+if codex_manifest.get("skills") == "./skills/":
+    good("Codex 清单 skills 用官方规范的目录字符串 ./skills/")
+else:
+    blow(f"Codex 清单 skills 应为 './skills/'，实为 {codex_manifest.get('skills')!r}")
+
+want = [f"./skills/{d.name}" for d in sorted((root / "skills").iterdir())
+        if d.is_dir() and (d / "SKILL.md").is_file()]
+claude_manifest = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+if claude_manifest.get("skills") == want:
+    good(f"Claude 清单 skills 列出全部 {len(want)} 个 skill")
+else:
+    blow(f"Claude 清单 skills 与 skills/ 实况不一致：{claude_manifest.get('skills')!r}")
+
 for p in manifests[2:]:
     if not p.is_file():
         continue

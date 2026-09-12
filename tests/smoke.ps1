@@ -240,7 +240,8 @@ try {
         $null = Get-Content -LiteralPath (Join-Path $R1 ".agents/plugins/marketplace.json") -Raw | ConvertFrom-Json
         $true
     }
-    Check "插件清单含 skill 列表" { (Raw (Join-Path $R1 ".codex-plugin/plugin.json")).Contains("./skills/code-review") }
+    Check "Codex 清单 skills 指向目录（官方规范）" { (Raw (Join-Path $R1 ".codex-plugin/plugin.json")).Contains('"skills": "./skills/"') }
+    Check "Claude 清单 skills 列出全部 skill" { (Raw (Join-Path $R1 ".claude-plugin/plugin.json")).Contains("./skills/code-review") }
     Check "VERSION 是 semver" { (Raw (Join-Path $R1 "VERSION")).Trim() -match '^\d+\.\d+\.\d+$' }
     Check "插件版本与 VERSION 一致" {
         $v = (Raw (Join-Path $R1 "VERSION")).Trim()

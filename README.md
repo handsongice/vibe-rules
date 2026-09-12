@@ -219,7 +219,17 @@ your-project/
 skills/<name>/agents/openai.yaml # 每个 skill 的 UI 元数据 + 默认提示词
 ```
 
-在 Codex 里把这个仓库加为 marketplace / 安装插件后，10 个 skill 以 `vibe-rules` 命名空间出现。
+安装（Codex CLI）：
+
+```bash
+codex plugin marketplace add handsongice/vibe-rules   # 也可以直接给本地路径
+codex plugin add vibe-rules@vibe-rules
+```
+
+装完后 10 个 skill 以 `vibe-rules:<skill>` 命名空间出现在 agent 的 skill 列表里
+（实测 codex-cli 0.147.0：`brainstorming`、`code-review`、`debug-production`、`frontend-taste`、
+`handoff`、`plain-writing`、`pre-commit-check`、`systematic-debugging`、`test-driven-development`、
+`writing-plans` 十个全部加载）。
 skill 的 `description` 决定它什么时候被自动加载；要强制走某个流程时直接点名：
 
 ```

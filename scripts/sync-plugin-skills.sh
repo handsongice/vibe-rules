@@ -33,7 +33,6 @@ import json, pathlib, sys
 
 check_only = sys.argv[1] == "1"
 root = pathlib.Path(".")
-manifests = [pathlib.Path(".claude-plugin/plugin.json"), pathlib.Path(".codex-plugin/plugin.json")]
 
 skills = [f"./skills/{d.name}" for d in sorted((root / "skills").iterdir())
           if d.is_dir() and (d / "SKILL.md").is_file()]
@@ -41,31 +40,35 @@ if not skills:
     print("❌ skills/ 下一个 skill 都没有", file=sys.stderr)
     sys.exit(1)
 
+# Codex：官方规范里 skills 是字符串路径，目录扫描天然覆盖全部 skill，不会漂移。
+# Claude：官方文档允许 string|array；我们的 marketplace 条目 source 指向仓库根，
+#         这种情形下显式子目录列表才保证每个 skill 都被加载，所以这里维护列表。
+targets = [
+    (pathlib.Path(".codex-plugin/plugin.json"), "./skills/"),
+    (pathlib.Path(".claude-plugin/plugin.json"), skills),
+]
+
 dirty = []
-for p in manifests:
+for p, want in targets:
     data = json.loads(p.read_text(encoding="utf-8"))
-    current = data.get("skills", [])
-    if current == skills:
+    current = data.get("skills")
+    if current == want:
         continue
     if check_only:
-        dirty.append((p, current, skills))
+        dirty.append((p, current, want))
         continue
-    data["skills"] = skills
+    data["skills"] = want
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"✅ 已同步 {p}（{len(skills)} 个 skill）")
+    print(f"✅ 已同步 {p}")
 
 if dirty:
     for p, current, want in dirty:
-        print(f"❌ {p} 的 skills 列表与 skills/ 实况不一致", file=sys.stderr)
-        missing = [s for s in want if s not in current]
-        extra = [s for s in current if s not in want]
-        for s in missing:
-            print(f"   缺少：{s}", file=sys.stderr)
-        for s in extra:
-            print(f"   多余：{s}", file=sys.stderr)
+        print(f"❌ {p} 的 skills 字段与预期不一致", file=sys.stderr)
+        print(f"   当前：{current}", file=sys.stderr)
+        print(f"   应为：{want}", file=sys.stderr)
     print("   修复：bash scripts/sync-plugin-skills.sh", file=sys.stderr)
     sys.exit(1)
 
 if check_only:
-    print(f"✅ 插件 skill 列表一致（{len(skills)} 个）")
+    print(f"✅ 插件 skill 清单一致（{len(skills)} 个 skill 目录）")
 PY

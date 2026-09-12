@@ -19,6 +19,8 @@
 
 ### 修复
 
+- 插件清单：Codex 的 `skills` 改为官方规范的目录字符串 `./skills/`（此前写成数组，实测能加载但不合规范）；
+  Claude 保留显式 skill 列表——它的 marketplace 条目 `source` 指向仓库根，这种情形按官方文档要显式声明子目录
 - `install.sh` / `install.ps1`：不再把 pwsh 在只读 HOME 环境落到工作目录的运行时缓存
   （`ModuleAnalysisCache*`、`StartupProfileData*`）复制进项目副本
 - `uninstall.sh --purge-project` / `uninstall.ps1 -PurgeProject`：直接删净整个 `.vibe-rules/`，

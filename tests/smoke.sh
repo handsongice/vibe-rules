@@ -254,7 +254,8 @@ check "verify 带空格路径" "$R2/scripts/verify.sh" "$P6"
 
 echo "== 14. 插件打包 =="
 check "validate-package.sh 通过" "$R2/scripts/validate-package.sh"
-check "插件清单含 skill 列表" grep -q './skills/code-review' "$R2/.codex-plugin/plugin.json"
+check "Codex 清单 skills 指向目录（官方规范）" grep -q '"skills": "./skills/"' "$R2/.codex-plugin/plugin.json"
+check "Claude 清单 skills 列出全部 skill" grep -q './skills/code-review' "$R2/.claude-plugin/plugin.json"
 check "每个 skill 有 agents/openai.yaml" test -f "$R2/skills/code-review/agents/openai.yaml"
 check "Codex marketplace 收录 vibe-rules" grep -q 'vibe-rules' "$R2/.agents/plugins/marketplace.json"
 check "Claude marketplace 收录 vibe-rules" grep -q 'vibe-rules' "$R2/.claude-plugin/marketplace.json"
@@ -264,7 +265,8 @@ printf -- '---\nname: fake-skill\ndescription: 测试用\nmetadata:\n  short-des
 printf 'interface:\n  display_name: "Fake"\n  short_description: "测试"\n  default_prompt: "Use $fake-skill now."\n' > "$R2/skills/fake-skill/agents/openai.yaml"
 refute "新增 skill 后未同步 → 检查失败" "$R2/scripts/sync-plugin-skills.sh" --check
 "$R2/scripts/sync-plugin-skills.sh" >/dev/null 2>&1
-check "同步后插件清单跟上" grep -q './skills/fake-skill' "$R2/.codex-plugin/plugin.json"
+check "同步后 Claude 清单跟上" grep -q './skills/fake-skill' "$R2/.claude-plugin/plugin.json"
+check "Codex 清单保持目录写法" grep -q '"skills": "./skills/"' "$R2/.codex-plugin/plugin.json"
 check "同步后整体校验通过" "$R2/scripts/validate-package.sh"
 
 printf -- '---\nname: wrong-name\ndescription: 名字不一致\n---\n\n# wrong\n' > "$R2/skills/fake-skill/SKILL.md"
