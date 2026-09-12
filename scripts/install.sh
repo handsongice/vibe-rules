@@ -12,26 +12,21 @@ set -euo pipefail
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_ROOT="${1:-$(pwd)}"
 
-# 支持的 agent 列表：编号 | 名称 | 类型 | 文件/目录 | 说明
-# 类型：single = symlink 到 AGENTS.md；dir = 目录型 wrapper 文件
+# 支持的 agent 列表：编号 | 名称 | 类型 | 文件路径 | 官方文档出处
+# 类型：native = 原生读 AGENTS.md，无需额外文件；single = symlink；dir = 目录型 wrapper
 AGENTS=(
-  "1|Claude Code|single|CLAUDE.md|根目录 CLAUDE.md"
-  "2|Codex CLI|single|AGENTS.md|原生读 AGENTS.md（已生成，无需额外操作）"
-  "3|Cursor|single|.cursorrules|根目录 .cursorrules"
-  "4|Cursor（新版规则）|dir|.cursor/rules/00-project-entry.mdc|.cursor/rules/ 目录"
-  "5|Qoder|dir|.qoder/rules/00-project-entry.md|.qoder/rules/ 目录"
-  "6|Trae|dir|.trae/rules/00-project-entry.md|.trae/rules/ 目录"
-  "7|CodeBuddy|dir|.codebuddy/rules/project-entry/RULE.mdc|.codebuddy/rules/ 目录"
-  "8|Hermes|dir|.hermes/rules/00-project-entry.md|.hermes/rules/ 目录"
-  "9|Kimi Code|dir|.kimi/rules/00-project-entry.md|.kimi/rules/ 目录"
-  "10|DeepSeek Harness|dir|.dsh/rules/00-project-entry.md|.dsh/rules/ 目录"
-  "11|Windsurf|single|.windsurfrules|根目录 .windsurfrules"
-  "12|GitHub Copilot|single|.github/copilot-instructions.md|.github/ 下"
-  "13|Cline|single|.clinerules|根目录 .clinerules"
-  "14|Roo Code|single|.roorules|根目录 .roorules"
-  "15|Aider|single|CONVENTIONS.md|根目录 CONVENTIONS.md"
-  "16|Gemini CLI|single|GEMINI.md|根目录 GEMINI.md"
-  "17|Continue|dir|.continue/rules/00-project-entry.md|.continue/rules/ 目录"
+  "1|Claude Code|single|CLAUDE.md|https://docs.anthropic.com/claude-code"
+  "2|Codex CLI|native|AGENTS.md|https://github.com/openai/codex"
+  "3|Cursor|single|.cursorrules|https://cursor.com/help/customization/rules"
+  "4|Cursor（新版规则）|dir|.cursor/rules/00-project-entry.mdc|https://cursor.com/help/customization/rules"
+  "5|Qoder|dir|.qoder/rules/00-project-entry.md|https://qoder.mintlify.app/user-guide/rules"
+  "6|Trae|dir|.trae/rules/00-project-entry.md|https://docs.trae.cn/ide/rules"
+  "7|CodeBuddy|dir|.codebuddy/rules/project-entry/RULE.mdc|https://www.codebuddy.cn/docs/ide/User-guide/Rules"
+  "8|Hermes|native|AGENTS.md|https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files"
+  "9|Kimi Code|native|AGENTS.md|https://moonshotai.github.io/kimi-code/en/customization/agents"
+  "10|DeepSeek Harness|native|AGENTS.md|https://github.com/deepseek-ai/deepseek-harness"
+  "11|Windsurf|single|.windsurfrules|https://docs.windsurf.com/windsurf/cascade/rules"
+  "12|GitHub Copilot|single|.github/copilot-instructions.md|https://docs.github.com/en/copilot"
 )
 
 # 解析参数
@@ -140,7 +135,9 @@ for entry in "${AGENTS[@]}"; do
     *) continue ;;
   esac
 
-  if [ "$type" = "single" ]; then
+  if [ "$type" = "native" ]; then
+    echo "  ℹ️  $name 原生读 AGENTS.md，无需额外文件"
+  elif [ "$type" = "single" ]; then
     if [ "$path" = ".github/copilot-instructions.md" ]; then
       mkdir -p .github
       link "../AGENTS.md" "$path"
@@ -148,7 +145,6 @@ for entry in "${AGENTS[@]}"; do
       link "AGENTS.md" "$path"
     fi
   elif [ "$type" = "dir" ]; then
-    # path 就是完整的文件路径，直接用
     write_wrapper "$path" "$name 项目入口规则"
   fi
 done

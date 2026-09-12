@@ -59,39 +59,36 @@ pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
 
 ## 支持的 agent
 
-一次安装，覆盖 15+ 个主流 coding agent。脚本会在项目根目录建好所有入口文件，不管你用哪个工具打开项目，它都能自动读到规则。
+每个 agent 的入口文件都来自官方文档，不是猜的。
+
+### 原生读 AGENTS.md（无需额外文件）
+
+| Agent | 说明 | 出处 |
+|---|---|---|
+| Codex CLI | 根目录 AGENTS.md | https://github.com/openai/codex |
+| Hermes | 根目录 AGENTS.md | https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files |
+| Kimi Code | 根目录 AGENTS.md | https://moonshotai.github.io/kimi-code/en/customization/agents |
+| DeepSeek Harness | 根目录 AGENTS.md | https://github.com/deepseek-ai/deepseek-harness |
 
 ### 单文件型（symlink 指向 AGENTS.md）
 
-| Agent | 入口文件 |
-|---|---|
-| Claude Code | `CLAUDE.md` |
-| Cursor（旧版） | `.cursorrules` |
-| Windsurf（旧版） | `.windsurfrules` |
-| GitHub Copilot | `.github/copilot-instructions.md` |
-| Cline | `.clinerules` |
-| Roo Code（旧版） | `.roorules` |
-| Aider | `CONVENTIONS.md` |
-| Gemini CLI | `GEMINI.md` |
-| CodeBuddy（旧版） | `CODEBUDDY.md` |
+| Agent | 入口文件 | 出处 |
+|---|---|---|
+| Claude Code | `CLAUDE.md` | https://docs.anthropic.com/claude-code |
+| Cursor | `.cursorrules` | https://cursor.com/help/customization/rules |
+| Windsurf | `.windsurfrules` | https://docs.windsurf.com/windsurf/cascade/rules |
+| GitHub Copilot | `.github/copilot-instructions.md` | https://docs.github.com/en/copilot |
 
-### 目录型（wrapper 文件，自动指向 AGENTS.md）
+### 目录型（wrapper 文件）
 
-| Agent | 目录 |
-|---|---|
-| Cursor（新版） | `.cursor/rules/` |
-| Windsurf（新版） | `.windsurf/rules/` |
-| Trae | `.trae/rules/` |
-| Qoder | `.qoder/rules/` |
-| CodeBuddy（新版） | `.codebuddy/rules/` |
-| Continue | `.continue/rules/` |
-| Roo Code（新版） | `.roo/rules/` |
-| Kiro | `.kiro/steering/` |
-| Amazon Q | `.amazonq/rules/` |
+| Agent | 路径 | 出处 |
+|---|---|---|
+| Cursor（新版） | `.cursor/rules/00-project-entry.mdc` | https://cursor.com/help/customization/rules |
+| Qoder | `.qoder/rules/00-project-entry.md` | https://qoder.mintlify.app/user-guide/rules |
+| Trae | `.trae/rules/00-project-entry.md` | https://docs.trae.cn/ide/rules |
+| CodeBuddy | `.codebuddy/rules/project-entry/RULE.mdc` | https://www.codebuddy.cn/docs/ide/User-guide/Rules |
 
-### 原生读 AGENTS.md
-
-Codex CLI、OpenCode、pi、Zed、Vibe 等新工具直接读根目录 `AGENTS.md`，无需额外配置。
+**换工具不用重配**：今天用 Cursor，明天换 Qoder，后天换 Claude Code，规则都在。
 
 **换工具不用重配**：今天用 Cursor，明天换 Trae，后天换 Claude Code，规则都在。脚本建的入口文件是幂等的，随时可重跑。
 
