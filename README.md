@@ -25,16 +25,33 @@
 
 ## 30 秒开始
 
+### macOS / Linux
+
 ```bash
 # 1. clone 到任意路径
 git clone https://github.com/handsongice/vibe-rules.git ~/code/vibe-rules
 
-# 2. 老项目接入（直接调用规则库里的脚本，不用 setup）
+# 2. 老项目接入（直接调用规则库里的脚本）
 ~/code/vibe-rules/scripts/install.sh /path/to/your-project
 
 # 3. 或者初始化新项目
 ~/code/vibe-rules/scripts/new-project.sh /path/to/new-project
 ```
+
+### Windows（PowerShell）
+
+```powershell
+# 1. clone 到任意路径
+git clone https://github.com/handsongice/vibe-rules.git C:\code\vibe-rules
+
+# 2. 老项目接入
+pwsh C:\code\vibe-rules\scripts\install.ps1 C:\path\to\your-project
+
+# 3. 或者初始化新项目
+pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
+```
+
+> Windows 上建 symlink 需要管理员权限或开启开发者模式。脚本会自动降级为复制文件，效果一样。
 
 完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。
 
