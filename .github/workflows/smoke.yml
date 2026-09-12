@@ -16,7 +16,7 @@ jobs:
         # ubuntu 是 bash 5，macOS 额外跑一遍系统自带 bash 3.2（见下面的步骤）
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: bash 版本
         run: |
@@ -39,7 +39,7 @@ jobs:
     name: powershell smoke (windows-latest)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: pwsh 版本
         run: $PSVersionTable.PSVersion.ToString()
