@@ -19,13 +19,14 @@ src/
 ```
 
 ## 代码风格
-- Props 必须带类型和默认值：
+- Props 必须带类型；有可选 prop 时用 `withDefaults` 给默认值（**类型声明式的
+  `defineProps<T>()` 不接受第二个运行时参数**，写了无效）：
   ```ts
-  const props = defineProps<{
+  const props = withDefaults(defineProps<{
     size?: 'sm' | 'md' | 'lg'
     items: Item[]
-  }>({
-    size: { default: 'md' }
+  }>(), {
+    size: 'md',
   })
   ```
 - Emits 用类型声明：`const emit = defineEmits<{ (e: 'change', v: string): void }>()`。
@@ -43,4 +44,4 @@ src/
 - 把异步操作放 `onMounted` 里但不处理错误/loading。
 - 直接修改 props（props 是只读的）。
 - 忘记组件名/文件名用 PascalCase（文件系统上），但模板里用 kebab-case。
-- Pinia store 里直接改 state 而不是用 action（小项目可直接改，大项目不行——看项目约定）。
+- Pinia store 里绕过 action 直接改 state（默认走 action；只有项目约定明确写「允许直改」时才例外）。

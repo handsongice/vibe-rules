@@ -9,7 +9,7 @@ applies_to: [all]
 
 # 生产问题排查
 
-> 通用的"找根因"方法论见 `~/.vibe/skills/systematic-debugging/SKILL.md`。本文件只讲生产环境特有的流程（止血、监控、不重启就挂着看）。
+> 通用的"找根因"方法论见同目录的 `systematic-debugging/SKILL.md`。本文件只讲生产环境特有的流程（止血、监控、不重启就挂着看）。
 
 ## 触发条件
 问题发生在生产环境、影响真实用户、且不能随便重启/回滚的时候。

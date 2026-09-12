@@ -1,6 +1,6 @@
 # 测试要求
 
-> 执行流程见 `~/.vibe/skills/test-driven-development/SKILL.md`（RED-GREEN-REFACTOR）。本文件只讲测试本身的规范。
+> 执行流程见规则库的 `skills/test-driven-development/SKILL.md`（RED-GREEN-REFACTOR，规则库路径见 `AGENTS.md` 顶部引用块）。本文件只讲测试本身的规范。
 
 ## 最低标准（按项目成熟度）
 - **新功能**：必须有单元测试覆盖核心逻辑。边界条件（空、null、超长、非法输入）至少各一个 case。
