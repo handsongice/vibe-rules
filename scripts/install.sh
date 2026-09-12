@@ -18,20 +18,20 @@ AGENTS=(
   "1|Claude Code|single|CLAUDE.md|根目录 CLAUDE.md"
   "2|Codex CLI|single|AGENTS.md|原生读 AGENTS.md（已生成，无需额外操作）"
   "3|Cursor|single|.cursorrules|根目录 .cursorrules"
-  "4|Cursor（新版规则）|dir|.cursor/rules/.mdc|.cursor/rules/ 目录"
-  "5|Qoder|dir|.qoder/rules/.md|.qoder/rules/ 目录"
-  "6|Trae|dir|.trae/rules/.md|.trae/rules/ 目录"
+  "4|Cursor（新版规则）|dir|.cursor/rules/00-project-entry.mdc|.cursor/rules/ 目录"
+  "5|Qoder|dir|.qoder/rules/00-project-entry.md|.qoder/rules/ 目录"
+  "6|Trae|dir|.trae/rules/00-project-entry.md|.trae/rules/ 目录"
   "7|CodeBuddy|dir|.codebuddy/rules/project-entry/RULE.mdc|.codebuddy/rules/ 目录"
-  "8|Hermes|dir|.hermes/rules/.md|.hermes/rules/ 目录"
-  "9|Kimi Code|dir|.kimi/rules/.md|.kimi/rules/ 目录"
-  "10|DeepSeek Harness|dir|.dsh/rules/.md|.dsh/rules/ 目录"
+  "8|Hermes|dir|.hermes/rules/00-project-entry.md|.hermes/rules/ 目录"
+  "9|Kimi Code|dir|.kimi/rules/00-project-entry.md|.kimi/rules/ 目录"
+  "10|DeepSeek Harness|dir|.dsh/rules/00-project-entry.md|.dsh/rules/ 目录"
   "11|Windsurf|single|.windsurfrules|根目录 .windsurfrules"
   "12|GitHub Copilot|single|.github/copilot-instructions.md|.github/ 下"
   "13|Cline|single|.clinerules|根目录 .clinerules"
   "14|Roo Code|single|.roorules|根目录 .roorules"
   "15|Aider|single|CONVENTIONS.md|根目录 CONVENTIONS.md"
   "16|Gemini CLI|single|GEMINI.md|根目录 GEMINI.md"
-  "17|Continue|dir|.continue/rules/.md|.continue/rules/ 目录"
+  "17|Continue|dir|.continue/rules/00-project-entry.md|.continue/rules/ 目录"
 )
 
 # 解析参数
@@ -148,12 +148,8 @@ for entry in "${AGENTS[@]}"; do
       link "AGENTS.md" "$path"
     fi
   elif [ "$type" = "dir" ]; then
-    # 取目录名，建 wrapper
-    dir_path=$(dirname "$path")
-    fname=$(basename "$path")
-    ext="${fname##*.}"
-    wrapper="$dir_path/00-project-entry.$ext"
-    write_wrapper "$wrapper" "$name 项目入口规则"
+    # path 就是完整的文件路径，直接用
+    write_wrapper "$path" "$name 项目入口规则"
   fi
 done
 
