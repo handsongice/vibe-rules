@@ -3,3 +3,6 @@
 .obsidian/workspace*
 .obsidian/cache
 .trash/
+
+# 项目专属沉淀由 new-project 在本机生成，默认不提交（确实要提交用 git add -f）
+projects/

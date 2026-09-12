@@ -85,12 +85,15 @@ if (-not (Test-Path "$ProjectSpecific\README.md")) {
 }
 
 # ---------- 3. 生成 AGENTS.md + 入口文件（交给 install.ps1，单一实现） ----------
-$installArgs = @($ProjectRoot)
-if ($All) { $installArgs += "-All" }
-if ($AgentNums) { $installArgs += @("-AgentNums", $AgentNums) }
-if ($Copy) { $installArgs += "-Copy" }
-if ($Yes) { $installArgs += "-Yes" }
-& (Join-Path $ScriptDir "install.ps1") @installArgs
+# 注意：这里必须用「哈希表 splat」，不能用数组 splat。
+# PowerShell 的数组 splat 只会按位置传参，"-AgentNums" 这种会被当成位置参数，
+# 直接报 “A positional parameter cannot be found that accepts argument '-AgentNums'”。
+$installParams = @{ ProjectRoot = $ProjectRoot }
+if ($All)       { $installParams["All"]       = $true }
+if ($AgentNums) { $installParams["AgentNums"] = $AgentNums }
+if ($Copy)      { $installParams["Copy"]      = $true }
+if ($Yes)       { $installParams["Yes"]       = $true }
+& (Join-Path $ScriptDir "install.ps1") @installParams
 
 Write-Host ""
 Write-Host "🎉 项目 $Slug 初始化完成。"

@@ -3,8 +3,8 @@
 # 用法：
 #   pwsh tests/smoke.ps1
 #
-# 在 Windows 上跑（CI 里是 windows-latest）：覆盖 install/verify/uninstall/new-project
-# 的入口文件创建、引用块注入、幂等、旧模板迁移、复制模式、-Help、无效编号拒绝。
+# 在 Windows 上跑（CI 里是 windows-latest）：覆盖 install/verify/uninstall/new-project/migrate
+# 的入口文件创建、引用块注入、幂等、旧模板迁移、复制模式、-Help、无效编号拒绝、跨项目迁移。
 #
 # 说明：bash 版（tests/smoke.sh）覆盖的命令更多（含 migrate、带空格路径、bash 3.2 回归），
 #       本文件只覆盖 PowerShell 侧的关键路径，两边互补。
@@ -35,11 +35,25 @@ function Refute {
     } catch { Ok $Desc }
 }
 
-# 独立进程跑脚本，拿退出码（避免污染当前会话）
+# 当前 PowerShell 可执行文件（不赌 PATH；拿不到就退回 "pwsh"）
+$script:PwshExe = Join-Path $PSHOME $(if ($IsWindows) { "pwsh.exe" } else { "pwsh" })
+if (-not (Test-Path $script:PwshExe)) { $script:PwshExe = "pwsh" }
+
+# 独立进程跑脚本，拿退出码（避免污染当前会话）。
+# 退出码非 0 时把子进程输出打出来，否则 CI 上只看到一行 [FAIL] 查不到原因。
 function Run-Script {
     param([string]$Path, [string[]]$ScriptArgs = @())
-    & pwsh -NoProfile -File $Path @ScriptArgs | Out-Null
-    return $LASTEXITCODE
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"   # native 的 stderr 在 Stop 下会变成终止错误
+    $out = & $script:PwshExe -NoProfile -File $Path @ScriptArgs 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($code -ne 0) {
+        Write-Host "      ┌─ $([System.IO.Path]::GetFileName($Path)) 退出码 $code，输出："
+        foreach ($line in @($out)) { Write-Host "      │ $line" }
+        Write-Host "      └─"
+    }
+    return $code
 }
 function Raw { param([string]$Path) [System.IO.File]::ReadAllText($Path) }
 function Write-Text {
@@ -144,7 +158,15 @@ try {
     Check "AGENTS.md 指向项目专属层" { (Raw (Join-Path $P6 "AGENTS.md")).Contains("projects") }
     Check "verify 通过" { (Run-Script $Verify @($P6)) -eq 0 }
 
-    Write-Host "== 10. uninstall =="
+    Write-Host "== 10. migrate =="
+    $MigA = Join-Path $R1 "projects/mig-a"
+    New-Item -ItemType Directory -Path $MigA -Force | Out-Null
+    Write-Text (Join-Path $MigA "README.md") "# mig-a`n`n沉淀内容`n"
+    $code = Run-Script $Migrate @("mig-a", "mig-b")
+    Check "migrate 退出码 0" { $code -eq 0 }
+    Check "沉淀内容已迁移到 mig-b" { (Raw (Join-Path $R1 "projects/mig-b/README.md")).Contains("沉淀内容") }
+
+    Write-Host "== 11. uninstall =="
     $code = Run-Script $Uninst @($P1)
     Check "uninstall 退出码 0" { $code -eq 0 }
     Refute "CLAUDE.md 已删除" { Test-Path (Join-Path $P1 "CLAUDE.md") }
