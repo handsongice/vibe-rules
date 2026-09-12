@@ -10,6 +10,8 @@
 #   --link           外链模式：项目里只放入口 + 引用块，规则本体留在本机规则库
 #                    （合规敏感、规则不便进仓库时用；默认是自包含副本模式）
 #   --no-personal    副本里不含 personal/（个人偏好与记忆不进项目仓库）
+#   --profile team     团队档：强制自包含副本 + 不含 personal/，并要求副本真的能进仓库
+#   --profile personal 个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   --copy           入口用真实文件复制代替 symlink（云端 agent / 无 symlink 环境）
 #   --yes            非交互模式（配合 --all / --agents）
 #   -h, --help       显示帮助
@@ -28,7 +30,8 @@ VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 CONF_FILE="$VIBE_HOME/scripts/agents.conf"
 
 usage() {
-  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+  # 打印文件开头的注释块（不用写死行号，以后加选项不会漏）
+  awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
 }
 
 # ---------- 参数解析 ----------
@@ -38,6 +41,7 @@ COPY_MODE=false
 ASSUME_YES=false
 LINK_MODE=false
 WITH_PERSONAL=true
+PROFILE="default"
 SELECTION_ARG=""
 
 while [ $# -gt 0 ]; do
@@ -54,6 +58,15 @@ while [ $# -gt 0 ]; do
     --agents=*) SELECTION_ARG="${1#--agents=}" ;;
     --link) LINK_MODE=true ;;
     --no-personal) WITH_PERSONAL=false ;;
+    --profile)
+      shift
+      if [ $# -eq 0 ]; then
+        echo "❌ --profile 需要参数：team 或 personal"
+        exit 1
+      fi
+      PROFILE="$1"
+      ;;
+    --profile=*) PROFILE="${1#--profile=}" ;;
     --copy) COPY_MODE=true ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
@@ -72,6 +85,29 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# ---------- 策略档位（本地/团队策略在脚本层收口，不靠人记） ----------
+case "$PROFILE" in
+  default) ;;
+  team)
+    if [ "$LINK_MODE" = true ]; then
+      echo "❌ --profile team 与 --link 矛盾：团队档要求规则副本进仓库，外链模式做不到"
+      exit 1
+    fi
+    WITH_PERSONAL=false
+    ;;
+  personal)
+    if [ "$WITH_PERSONAL" = false ]; then
+      echo "❌ --profile personal 与 --no-personal 矛盾：个人档就是要把个人层带上"
+      exit 1
+    fi
+    LINK_MODE=true
+    ;;
+  *)
+    echo "❌ --profile 只支持 team 或 personal，收到：$PROFILE"
+    exit 1
+    ;;
+esac
 
 if [ -z "$PROJECT_ROOT" ]; then
   PROJECT_ROOT="$(pwd)"
@@ -180,6 +216,12 @@ fi
 RULES_DIR="$PROJECT_ROOT/.vibe-rules"
 PERSONAL_NOTE="（有就读）"
 
+case "$PROFILE" in
+  team)     echo "🧭 策略档位：team（团队共享：副本进仓库 + 不含 personal/）" ;;
+  personal) echo "🧭 策略档位：personal（个人自用：外链模式，规则不进仓库）" ;;
+  *)        echo "🧭 策略档位：default（未指定，按上面选的模式走）" ;;
+esac
+
 if [ "$MODE" = "embedded" ]; then
   echo "📦 模式：自包含副本（规则复制进 ${RULES_DIR}，引用块用相对路径）"
 else
@@ -261,6 +303,20 @@ if [ "$MODE" = "embedded" ]; then
   else
     echo "   ℹ️  project/README.md 已存在，保留不动"
   fi
+
+  # 项目文档约定（规格驱动）：设计文档 docs/specs/、实现计划 docs/plans/
+  # 同样只在不存在时建档，永不覆盖用户已有的内容
+  mkdir -p "$PROJECT_ROOT/docs/specs" "$PROJECT_ROOT/docs/plans"
+  if [ ! -f "$PROJECT_ROOT/docs/specs/README.md" ]; then
+    sed -e "s|@SLUG@|${SLUG}|g" "$VIBE_HOME/templates/DOCS-SPECS.md" \
+        > "$PROJECT_ROOT/docs/specs/README.md"
+    echo "   ✅ docs/specs/README.md（设计文档约定）"
+  fi
+  if [ ! -f "$PROJECT_ROOT/docs/plans/README.md" ]; then
+    sed -e "s|@SLUG@|${SLUG}|g" "$VIBE_HOME/templates/DOCS-PLANS.md" \
+        > "$PROJECT_ROOT/docs/plans/README.md"
+    echo "   ✅ docs/plans/README.md（实现计划约定）"
+  fi
 else
   # 外链模式：项目笔记留在规则库 projects/<slug>/（多项目互不覆盖）
   LINK_NOTES_DIR="$VIBE_HOME/projects/$SLUG"
@@ -307,6 +363,7 @@ $BLOCK_INTRO
 4. **本项目专属沉淀**：\`$NOTES_REF\` —— 最具体，冲突时优先
 5. **技术栈规范**：\`$RULES_REF/languages/<tech>.md\`（按本项目实际栈读，不要全读）
 6. **可复用工作流**：\`$RULES_REF/skills/README.md\`，再按当前任务挑一个 \`$RULES_REF/skills/<name>/SKILL.md\`
+7. **本项目文档约定**：设计文档 → \`docs/specs/YYYY-MM-DD-<topic>.md\`，实现计划 → \`docs/plans/YYYY-MM-DD-<feature>.md\`（写法见 skills/brainstorming、skills/writing-plans）
 
 > 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
@@ -488,6 +545,7 @@ else
 fi
 cat > "$EVIDENCE_FILE" <<EOF
 mode=$MODE
+profile=$PROFILE
 rules_home=$VIBE_HOME
 rules_version=$VIBE_VERSION
 installed_at=$INSTALLED_AT
@@ -500,6 +558,25 @@ echo ""
 echo "🎉 完成。"
 echo "   验证：$VIBE_HOME/scripts/verify.sh $PROJECT_ROOT"
 echo ""
+
+# ---------- 档位自查：team 必须真的能进仓库，personal 不该被提交 ----------
+IGNORES_VIBE=false
+if [ -f "$PROJECT_ROOT/.gitignore" ] && \
+   grep -qE '^[[:space:]]*/?\.vibe-rules/?[[:space:]]*$' "$PROJECT_ROOT/.gitignore"; then
+  IGNORES_VIBE=true
+fi
+if [ "$PROFILE" = "team" ] && [ "$IGNORES_VIBE" = true ]; then
+  echo "⚠️  团队档提醒：本项目 .gitignore 忽略了 .vibe-rules/，副本不会进仓库，"
+  echo "   队友 / 云端 agent / CI 都读不到——这正是团队档要拦住的情况。"
+  echo "   修：把该条从 .gitignore 删掉（或加一行 !.vibe-rules/ 例外）；"
+  echo "   如果你就是不想让规则进仓库，改用 --profile personal 重装。"
+  echo ""
+fi
+if [ "$PROFILE" = "personal" ] && [ "$IGNORES_VIBE" = false ]; then
+  echo "⚠️  个人档提醒：建议把 .vibe-rules 加进项目 .gitignore——"
+  echo "   外链模式的证据文件里记的是本机规则库绝对路径，提交上去对别人没用。"
+  echo ""
+fi
 if [ "$MODE" = "embedded" ]; then
   echo "   提示："
   echo "   - 规则副本已进项目：.vibe-rules/（整目录提交进仓库，团队/云端/CI 都能直接读到，不依赖任何人的本机路径）"

@@ -11,20 +11,25 @@
 #
 # 注意：
 #   - 更新前先把规则库本身拉到最新：git -C <规则库> pull
-#   - 模式和 agent 选择会自动沿用证据文件（.vibe-rules/installed）里的记录，不用重新选；
-#     想改模式/agent，直接把对应选项传给 install.sh
+#   - 模式、策略档位（profile）和 agent 选择会自动沿用证据文件（.vibe-rules/installed）
+#     里的记录，不用重新选；想改，直接把对应选项传给 install.sh（显式传 --link /
+#     --no-personal / --profile 会覆盖沿用值）
 
 set -euo pipefail
 
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 
+usage() {
+  awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "$0"
+}
+
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+  usage
   exit 0
 fi
 
 if [ $# -lt 1 ]; then
-  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+  usage
   exit 1
 fi
 
@@ -54,15 +59,32 @@ echo "🔄 更新规则副本：$PROJECT_ROOT"
 # 没显式指定模式/agent 时，沿用证据文件里的记录（更新不该逼用户重新选一遍）
 MODE_FROM_EVIDENCE="$(sed -n 's/^mode=//p' "$EVIDENCE" | head -n 1)"
 AGENTS_FROM_EVIDENCE="$(sed -n 's/^agents=//p' "$EVIDENCE" | head -n 1)"
+PROFILE_FROM_EVIDENCE="$(sed -n 's/^profile=//p' "$EVIDENCE" | head -n 1)"
 
+# 显式传了 --link / --no-personal / --profile 就按用户的来，不再沿用档位
+EXPLICIT_OVERRIDE=false
 case " $* " in
-  *" --link "*) ;;
-  *)
-    if [ "$MODE_FROM_EVIDENCE" = "link" ]; then
-      set -- "$@" --link
-    fi
-    ;;
+  *" --link "*|*" --no-personal "*|*" --profile "*) EXPLICIT_OVERRIDE=true ;;
 esac
+
+if [ "$EXPLICIT_OVERRIDE" = false ]; then
+  case "$PROFILE_FROM_EVIDENCE" in
+    team|personal)
+      # 档位是装的时候定的策略，更新时原样沿用（team 会顺带带上 --no-personal 的语义）
+      set -- "$@" --profile "$PROFILE_FROM_EVIDENCE"
+      ;;
+    *)
+      case " $* " in
+        *" --link "*) ;;
+        *)
+          if [ "$MODE_FROM_EVIDENCE" = "link" ]; then
+            set -- "$@" --link
+          fi
+          ;;
+      esac
+      ;;
+  esac
+fi
 
 case " $* " in
   *" --agents"*|*" --all "*)

@@ -1,13 +1,15 @@
 # install.ps1 —— 在你的开发项目里接入 vibe-rules（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Copy] [-Yes]
+#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Profile team|personal] [-Copy] [-Yes]
 #
 # 选项：
 #   -All            安装所有 agent 入口
 #   -AgentNums 1,3  只安装指定编号（逗号或空格分隔）
 #   -Link           外链模式：规则本体留在本机规则库，引用块用绝对路径（默认是自包含副本模式）
 #   -NoPersonal     副本里不含 personal\（个人偏好与记忆不进项目仓库）
+#   -Profile team      团队档：强制自包含副本 + 不含 personal\，并要求副本真的能进仓库
+#   -Profile personal  个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   -Copy           入口用真实文件复制代替 symlink（无 symlink 权限时的默认降级也一样）
 #   -Yes            非交互模式（配合 -All / -AgentNums）
 #   -Help           显示本帮助
@@ -25,6 +27,7 @@ param(
     [string]$AgentNums = "",
     [switch]$Link,
     [switch]$NoPersonal,
+    [string]$Profile = "default",
     [switch]$Copy,
     [switch]$Yes
 )
@@ -123,8 +126,36 @@ if ($SelectedNums.Count -eq 0) {
     exit 1
 }
 
+# ---------- 策略档位（本地/团队策略在脚本层收口，不靠人记） ----------
+switch ($Profile) {
+    "default" { }
+    "team" {
+        if ($Link) {
+            Write-Host "❌ -Profile team 与 -Link 矛盾：团队档要求规则副本进仓库，外链模式做不到"
+            exit 1
+        }
+        $NoPersonal = $true
+    }
+    "personal" {
+        if ($NoPersonal) {
+            Write-Host "❌ -Profile personal 与 -NoPersonal 矛盾：个人档就是要把个人层带上"
+            exit 1
+        }
+        $Link = $true
+    }
+    default {
+        Write-Host "❌ -Profile 只支持 team 或 personal，收到：$Profile"
+        exit 1
+    }
+}
+
 # ---------- 模式与规则本体 ----------
 if ($Link) { $Mode = "link" } else { $Mode = "embedded" }
+switch ($Profile) {
+    "team"     { Write-Host "🧭 策略档位：team（团队共享：副本进仓库 + 不含 personal）" }
+    "personal" { Write-Host "🧭 策略档位：personal（个人自用：外链模式，规则不进仓库）" }
+    default    { Write-Host "🧭 策略档位：default（未指定，按上面选的模式走）" }
+}
 $RulesDir = Join-Path $ProjectRoot ".vibe-rules"
 $PersonalNote = "（有就读）"
 
@@ -224,6 +255,25 @@ if ($Mode -eq "embedded") {
     } else {
         Write-Host "   ℹ️  project\README.md 已存在，保留不动"
     }
+
+    # 项目文档约定（规格驱动）：设计文档 docs\specs\、实现计划 docs\plans\
+    # 同样只在不存在时建档，永不覆盖用户已有内容
+    foreach ($docDir in @("specs", "plans")) {
+        $docPath = Join-Path $ProjectRoot "docs\$docDir"
+        if (-not (Test-Path $docPath)) { New-Item -ItemType Directory -Path $docPath -Force | Out-Null }
+    }
+    $specsReadme = Join-Path $ProjectRoot "docs\specs\README.md"
+    if (-not (Test-Path $specsReadme)) {
+        $tpl = (Get-Content (Join-Path $VibeHome "templates\DOCS-SPECS.md") -Raw).Replace("@SLUG@", $Slug)
+        [System.IO.File]::WriteAllText($specsReadme, $tpl, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "   ✅ docs\specs\README.md（设计文档约定）"
+    }
+    $plansReadme = Join-Path $ProjectRoot "docs\plans\README.md"
+    if (-not (Test-Path $plansReadme)) {
+        $tpl = (Get-Content (Join-Path $VibeHome "templates\DOCS-PLANS.md") -Raw).Replace("@SLUG@", $Slug)
+        [System.IO.File]::WriteAllText($plansReadme, $tpl, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "   ✅ docs\plans\README.md（实现计划约定）"
+    }
 } else {
     $linkNotes = Join-Path $VibeHome "projects\$Slug"
     if (-not (Test-Path (Join-Path $linkNotes "README.md"))) {
@@ -260,6 +310,7 @@ $BlockTemplate = @'
 4. **本项目专属沉淀**：`@NOTES_REF@` —— 最具体，冲突时优先
 5. **技术栈规范**：`@RULES_REF@/languages/<tech>.md`（按本项目实际栈读，不要全读）
 6. **可复用工作流**：`@RULES_REF@/skills/README.md`，再按当前任务挑一个 `@RULES_REF@/skills/<name>/SKILL.md`
+7. **本项目文档约定**：设计文档 → `docs/specs/YYYY-MM-DD-<topic>.md`，实现计划 → `docs/plans/YYYY-MM-DD-<feature>.md`（写法见 skills/brainstorming、skills/writing-plans）
 
 > 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
@@ -440,6 +491,7 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $
 $agentsList = ($SelectedNums -join ",")
 $evidence = @"
 mode=$Mode
+profile=$Profile
 rules_home=$VibeHome
 rules_version=$vibeVersion
 installed_at=$(Get-Date -Format "yyyy-MM-dd")
@@ -477,4 +529,23 @@ if ($Mode -eq "embedded") {
 } else {
     Write-Host "   - 外链模式：规则本体留在本机，$VibeHome 搬家后重跑 install/update 即可刷新"
     Write-Host "   - .vibe-rules 里记录的是本机路径，建议加进项目 .gitignore（不要提交）"
+}
+
+# ---------- 档位自查：team 必须真的能进仓库，personal 不该被提交 ----------
+$ignoresVibe = $false
+$gitignorePath = Join-Path $ProjectRoot ".gitignore"
+if (Test-Path $gitignorePath) {
+    if (Get-Content $gitignorePath | Where-Object { $_ -match '^\s*/?\.vibe-rules/?\s*$' }) { $ignoresVibe = $true }
+}
+if ($Profile -eq "team" -and $ignoresVibe) {
+    Write-Host ""
+    Write-Host "⚠️  团队档提醒：本项目 .gitignore 忽略了 .vibe-rules\，副本不会进仓库，"
+    Write-Host "   队友 / 云端 agent / CI 都读不到——这正是团队档要拦住的情况。"
+    Write-Host "   修：把该条从 .gitignore 删掉（或加一行 !.vibe-rules/ 例外）；"
+    Write-Host "   如果你就是不想让规则进仓库，改用 -Profile personal 重装。"
+}
+if ($Profile -eq "personal" -and -not $ignoresVibe) {
+    Write-Host ""
+    Write-Host "⚠️  个人档提醒：建议把 .vibe-rules 加进项目 .gitignore——"
+    Write-Host "   外链模式的证据文件里记的是本机规则库绝对路径，提交上去对别人没用。"
 }

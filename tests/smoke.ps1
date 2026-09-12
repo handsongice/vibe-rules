@@ -5,7 +5,7 @@
 #
 # 覆盖 install/verify/uninstall/new-project/update 的：
 #   自包含副本模式（默认）、外链模式（-Link）、引用块注入、幂等、旧模板迁移、
-#   -Copy 复制模式、-NoPersonal、项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
+#   -Copy 复制模式、-NoPersonal、-Profile 策略档位、项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
 #
 # 说明：bash 版（tests/smoke.sh）另覆盖 migrate、带空格路径、bash 3.2 回归，两边互补。
 
@@ -53,6 +53,15 @@ function Run-Script {
         Write-Host "      └─"
     }
     return $code
+}
+# 跑脚本并拿到输出文本（断言提示语用）
+function Run-ScriptOut {
+    param([string]$Path, [string[]]$ScriptArgs = @())
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $out = (& $script:PwshExe -NoProfile -File $Path @ScriptArgs 2>&1 | Out-String)
+    $ErrorActionPreference = $prevEap
+    return $out
 }
 function Raw { param([string]$Path) [System.IO.File]::ReadAllText($Path) }
 function Write-Text {
@@ -108,6 +117,10 @@ try {
     Check "副本无 pwsh 运行时垃圾文件（ModuleAnalysisCache）" { -not (Test-Path (Join-Path $P1 ".vibe-rules/ModuleAnalysisCache-TESTONLY")) }
     Check "证据文件在副本内" { Test-Path (Join-Path $P1 ".vibe-rules/installed") }
     Check "证据文件记录 mode=embedded" { (Raw (Join-Path $P1 ".vibe-rules/installed")).Contains("mode=embedded") }
+    Check "证据文件记录 profile=default" { (Raw (Join-Path $P1 ".vibe-rules/installed")).Contains("profile=default") }
+    Check "项目文档约定：docs/specs/README.md 建档" { Test-Path (Join-Path $P1 "docs/specs/README.md") }
+    Check "项目文档约定：docs/plans/README.md 建档" { Test-Path (Join-Path $P1 "docs/plans/README.md") }
+    Check "引用块含文档约定（第 7 条）" { (Raw $Agents1).Contains("docs/plans/YYYY-MM-DD") }
     Check "CLAUDE.md 入口（symlink 或复制）" { Test-Path (Join-Path $P1 "CLAUDE.md") }
     Check "Cursor 规则文件" { Test-Path (Join-Path $P1 ".cursor/rules/00-project-entry.mdc") }
     Check "CodeBuddy RULE.mdc" { Test-Path (Join-Path $P1 ".codebuddy/rules/project-entry/RULE.mdc") }
@@ -243,6 +256,11 @@ try {
     Check "Codex 清单 skills 指向目录（官方规范）" { (Raw (Join-Path $R1 ".codex-plugin/plugin.json")).Contains('"skills": "./skills/"') }
     Check "Claude 清单 skills 列出全部 skill" { (Raw (Join-Path $R1 ".claude-plugin/plugin.json")).Contains("./skills/code-review") }
     Check "VERSION 是 semver" { (Raw (Join-Path $R1 "VERSION")).Trim() -match '^\d+\.\d+\.\d+$' }
+    Check "RELEASE-NOTES.md 存在" { Test-Path (Join-Path $R1 "RELEASE-NOTES.md") }
+    Check ".pre-commit-config.yaml 存在" { Test-Path (Join-Path $R1 ".pre-commit-config.yaml") }
+    Check "pre-commit 挂了 validate-package" { (Raw (Join-Path $R1 ".pre-commit-config.yaml")).Contains("scripts/validate-package.sh") }
+    Check "preflight.sh 存在" { Test-Path (Join-Path $R1 "scripts/preflight.sh") }
+    Check "preflight 里挂了 pwsh 冒烟" { (Raw (Join-Path $R1 "scripts/preflight.sh")).Contains("smoke.ps1") }
     Check "插件版本与 VERSION 一致" {
         $v = (Raw (Join-Path $R1 "VERSION")).Trim()
         $manifest = Get-Content -LiteralPath (Join-Path $R1 ".codex-plugin/plugin.json") -Raw | ConvertFrom-Json
@@ -263,6 +281,55 @@ try {
         }
         $ok
     }
+
+    Write-Host "== 13b. 策略档位 -Profile =="
+    $c1 = Run-Script $Install @((Join-Path $TmpRoot "proj-c1"), "-Profile", "team", "-Link", "-Yes")
+    Check "-Profile team 与 -Link 冲突被拒绝" { $c1 -ne 0 }
+    $c2 = Run-Script $Install @((Join-Path $TmpRoot "proj-c2"), "-Profile", "personal", "-NoPersonal", "-Yes")
+    Check "-Profile personal 与 -NoPersonal 冲突被拒绝" { $c2 -ne 0 }
+    $c3 = Run-Script $Install @((Join-Path $TmpRoot "proj-c3"), "-Profile", "nope", "-Yes")
+    Check "-Profile 非法值被拒绝" { $c3 -ne 0 }
+    Refute "被拒绝的档位没在项目里留垃圾" { Test-Path (Join-Path $TmpRoot "proj-c1/.vibe-rules") }
+
+    $PT = Join-Path $TmpRoot "proj-team"
+    New-Item -ItemType Directory -Path $PT -Force | Out-Null
+    Write-Text (Join-Path $PT ".gitignore") "node_modules/`n"
+    $code = Run-Script $Install @($PT, "-Profile", "team", "-AgentNums", "1", "-Yes")
+    Check "install -Profile team 退出码 0" { $code -eq 0 }
+    $teamEvidence = raw (Join-Path $PT ".vibe-rules/installed")
+    Check "team：证据文件 profile=team" { $teamEvidence.Contains("profile=team") }
+    Check "team：模式仍是 embedded" { $teamEvidence.Contains("mode=embedded") }
+    Refute "team：副本不含 personal\" { Test-Path (Join-Path $PT ".vibe-rules/personal") }
+    Check "team：verify 通过" { (Run-Script $Verify @($PT)) -eq 0 }
+
+    Add-Content -Path (Join-Path $R1 "global/anti-patterns.md") -Value "`n# 档位沿用测试`n"
+    $code = Run-Script $Update @($PT)
+    Check "team：update 退出码 0" { $code -eq 0 }
+    Check "team：update 沿用档位（profile=team）" { (Raw (Join-Path $PT ".vibe-rules/installed")).Contains("profile=team") }
+    Refute "team：update 后仍然不含 personal\" { Test-Path (Join-Path $PT ".vibe-rules/personal") }
+
+    Add-Content -Path (Join-Path $PT ".gitignore") ".vibe-rules/`n"
+    $teamOut = Run-ScriptOut $Install @($PT, "-Profile", "team", "-AgentNums", "1", "-Yes")
+    Check "team：装的时候提醒副本被 .gitignore 排除" { $teamOut.Contains("团队档提醒") }
+    Refute "team：.gitignore 忽略副本 → verify 报错" { (Run-Script $Verify @($PT)) -eq 0 }
+
+    $PP = Join-Path $TmpRoot "proj-personal"
+    New-Item -ItemType Directory -Path $PP -Force | Out-Null
+    $code = Run-Script $Install @($PP, "-Profile", "personal", "-AgentNums", "1", "-Yes")
+    Check "install -Profile personal 退出码 0" { $code -eq 0 }
+    Check "personal：证据文件 profile=personal" { (Raw (Join-Path $PP ".vibe-rules")).Contains("profile=personal") }
+    Check "personal：模式是 link" { (Raw (Join-Path $PP ".vibe-rules")).Contains("mode=link") }
+    Refute "personal：规则本体没进项目" { Test-Path (Join-Path $PP ".vibe-rules/global") }
+    Check "personal：verify 通过（未忽略只警告）" { (Run-Script $Verify @($PP)) -eq 0 }
+    Write-Text (Join-Path $PP ".gitignore") ".vibe-rules`n"
+    Check "personal：加了 .gitignore 后 verify 仍通过" { (Run-Script $Verify @($PP)) -eq 0 }
+    Remove-Item -LiteralPath (Join-Path $PP ".gitignore") -Force
+    $code = Run-Script $Install @($PP, "-Profile", "team", "-AgentNums", "1", "-Yes")
+    Check "personal → team：显式覆盖档位" { $code -eq 0 }
+    $ppEvidence = Raw (Join-Path $PP ".vibe-rules/installed")
+    Check "覆盖后模式变 embedded" { $ppEvidence.Contains("mode=embedded") }
+    Check "覆盖后档位变 team" { $ppEvidence.Contains("profile=team") }
+    Check "覆盖后 verify 通过" { (Run-Script $Verify @($PP)) -eq 0 }
 
     Write-Host "== 14. uninstall =="
     $code = Run-Script $Uninst @($P1)

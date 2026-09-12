@@ -7,7 +7,7 @@
 #   - 重新复制规则本体到 <项目>\.vibe-rules\（embedded 模式，默认）
 #   - 刷新 AGENTS.md 顶部的引用块
 #   - 保留 .vibe-rules\project\ 里的项目专属笔记（永不覆盖）
-#   - 没显式指定 mode/agent 时，沿用证据文件里上次安装的选择
+#   - 没显式指定 mode/profile/agent 时，沿用证据文件里上次安装的选择
 #
 # 选项：
 #   -Link           显式切回/保持外链模式（一般不传：自动沿用上次安装的模式）
@@ -68,14 +68,23 @@ Write-Host "🔄 更新规则副本：$ProjectRoot"
 
 $modeFromEvidence = ""
 $agentsFromEvidence = ""
+$profileFromEvidence = ""
 foreach ($line in ((Get-Content $evidence -Raw) -split "`r?`n")) {
     if ($line -like "mode=*") { $modeFromEvidence = $line.Substring(5).Trim() }
     if ($line -like "agents=*") { $agentsFromEvidence = $line.Substring(7).Trim() }
+    if ($line -like "profile=*") { $profileFromEvidence = $line.Substring(8).Trim() }
 }
 
 $installParams = @{ ProjectRoot = $ProjectRoot }
-if ($Link -or $modeFromEvidence -eq "link") { $installParams["Link"] = $true }
-if ($NoPersonal) { $installParams["NoPersonal"] = $true }
+# 显式传了 -Link / -NoPersonal 就按用户的来，不再沿用档位
+$explicitOverride = $Link -or $NoPersonal
+if (-not $explicitOverride -and ($profileFromEvidence -eq "team" -or $profileFromEvidence -eq "personal")) {
+    # 档位是装的时候定的策略，更新时原样沿用
+    $installParams["Profile"] = $profileFromEvidence
+} else {
+    if ($Link -or $modeFromEvidence -eq "link") { $installParams["Link"] = $true }
+    if ($NoPersonal) { $installParams["NoPersonal"] = $true }
+}
 if ($Copy) { $installParams["Copy"] = $true }
 if ($agentsFromEvidence) { $installParams["AgentNums"] = $agentsFromEvidence }
 $installParams["Yes"] = $true

@@ -71,13 +71,15 @@ if (-not $evidence) {
 }
 Ok "证据文件存在：$evidence"
 
-$mode = ""; $rulesHome = ""; $rulesVersion = ""; $installed = ""
+$mode = ""; $rulesHome = ""; $rulesVersion = ""; $installed = ""; $profile = ""
 foreach ($line in ((Get-Content $evidence -Raw) -split "`r?`n")) {
     if ($line -like "mode=*") { $mode = $line.Substring(5).Trim() }
     if ($line -like "rules_home=*") { $rulesHome = $line.Substring(11).Trim() }
     if ($line -like "rules_version=*") { $rulesVersion = $line.Substring(14).Trim() }
     if ($line -like "agents=*") { $installed = $line.Substring(7).Trim() }
+    if ($line -like "profile=*") { $profile = $line.Substring(8).Trim() }
 }
+if (-not $profile) { $profile = "default" }   # 兼容旧版证据文件
 if (-not $mode) { $mode = "link" }   # 兼容旧版证据文件
 if ($mode -eq "embedded" -or $mode -eq "link") {
     Ok "模式：$mode"
@@ -112,6 +114,55 @@ if ($mode -eq "embedded") {
     foreach ($extra in @("personal\preferences.md", "personal\memory.md", "global\anti-patterns.md")) {
         if (-not ($rulesHome -and (Test-Path (Join-Path $rulesHome $extra)))) {
             Warn "规则库中缺少 $extra（AGENTS.md 引用块会指向空路径）"
+        }
+    }
+}
+
+# ---------- 2b. 策略档位（本地/团队策略有没有真的落实） ----------
+$ignoresVibe = $false
+if (Test-Path ".gitignore") {
+    if (Get-Content ".gitignore" | Where-Object { $_ -match '^\s*/?\.vibe-rules/?\s*$' }) { $ignoresVibe = $true }
+}
+
+switch ($profile) {
+    "default" { Ok "策略档位：default（未指定，按细粒度选项走）" }
+    "team" {
+        Ok "策略档位：team（团队共享）"
+        if ($mode -ne "embedded") {
+            Bad "团队档要求自包含副本模式，实际是 $mode（重跑 install.ps1 -Profile team）"
+        }
+        if (Test-Path ".vibe-rules\personal") {
+            Bad "团队档副本里不该有 personal\（个人偏好会跟着进仓库；重跑 install.ps1 -Profile team）"
+        } else {
+            Ok "团队档：副本不含 personal\"
+        }
+        if ($ignoresVibe) {
+            Bad "团队档：.gitignore 忽略了 .vibe-rules\，副本进不了仓库（队友/云端/CI 读不到）"
+        } else {
+            Ok "团队档：.vibe-rules\ 没有被 .gitignore 排除"
+        }
+    }
+    "personal" {
+        Ok "策略档位：personal（个人自用）"
+        if ($mode -ne "link") {
+            Bad "个人档要求外链模式，实际是 $mode（重跑 install.ps1 -Profile personal）"
+        }
+        if (-not $ignoresVibe) {
+            Warn "个人档：.vibe-rules 没被 .gitignore 忽略，本机路径会被提交（加一行 .vibe-rules 即可）"
+        } else {
+            Ok "个人档：.vibe-rules 已被 .gitignore 忽略"
+        }
+    }
+    default { Bad "证据文件 profile 值无效：$profile（应为 team / personal / default）" }
+}
+
+# 项目文档约定（规格驱动）：副本模式下由 install 建档
+if ($mode -eq "embedded") {
+    foreach ($docDir in @("docs\specs", "docs\plans")) {
+        if (Test-Path (Join-Path $docDir "README.md")) {
+            Ok "文档约定已就位：$docDir\README.md"
+        } else {
+            Warn "缺少 $docDir\README.md（重跑 install.ps1 会建档，且不会覆盖已有内容）"
         }
     }
 }

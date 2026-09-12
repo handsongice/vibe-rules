@@ -17,7 +17,8 @@
 #  11. uninstall：入口清干净、AGENTS.md 正文保留、项目笔记保留（--purge-project 才删）
 #  12. migrate：跨项目迁移（含 bash 3.2 重复运行回归）
 #  13. 带空格路径
-#  14. 插件打包：skill 结构 / 清单一致性 / 版本同步
+#  14. 插件打包：skill 结构 / 清单一致性 / 版本同步 / pre-commit 与 preflight
+#  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ personal（外链不进仓库）+ 冲突拒绝
 
 set -euo pipefail
 
@@ -39,6 +40,10 @@ refute() {
   local desc="$1"
   shift
   if "$@" >/dev/null 2>&1; then bad "$desc"; else ok "$desc"; fi
+}
+has() {
+  # 输出里包含某段文字（用于断言脚本的提示语）
+  case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac
 }
 copy_repo() {
   local dest="$1"
@@ -74,6 +79,11 @@ check "副本不含 pwsh 运行时垃圾（ModuleAnalysisCache）" test ! -e "$P
 check "副本不含 pwsh 运行时垃圾（StartupProfileData）" test ! -e "$P1/.vibe-rules/StartupProfileData-NonInteractive"
 check "证据文件在副本内" test -f "$P1/.vibe-rules/installed"
 check "证据文件记录 mode=embedded" grep -q '^mode=embedded$' "$P1/.vibe-rules/installed"
+check "证据文件记录 profile=default" grep -q '^profile=default$' "$P1/.vibe-rules/installed"
+check "项目文档约定：docs/specs/README.md 建档" test -f "$P1/docs/specs/README.md"
+check "项目文档约定：docs/plans/README.md 建档" test -f "$P1/docs/plans/README.md"
+check "文档约定 README 带项目名（specs）" grep -q 'proj-empty' "$P1/docs/specs/README.md"
+check "引用块含文档约定（第 7 条）" grep -q 'docs/plans/YYYY-MM-DD' "$P1/AGENTS.md"
 check "CLAUDE.md symlink" test -L "$P1/CLAUDE.md"
 check "Cursor 规则文件" test -f "$P1/.cursor/rules/00-project-entry.mdc"
 check "CodeBuddy RULE.mdc" test -f "$P1/.codebuddy/rules/project-entry/RULE.mdc"
@@ -254,6 +264,13 @@ check "verify 带空格路径" "$R2/scripts/verify.sh" "$P6"
 
 echo "== 14. 插件打包 =="
 check "validate-package.sh 通过" "$R2/scripts/validate-package.sh"
+check "RELEASE-NOTES.md 存在" test -f "$R2/RELEASE-NOTES.md"
+check ".pre-commit-config.yaml 存在" test -f "$R2/.pre-commit-config.yaml"
+check "pre-commit 挂了 validate-package" grep -q 'scripts/validate-package.sh' "$R2/.pre-commit-config.yaml"
+check "pre-commit 挂了 smoke" grep -q 'tests/smoke.sh' "$R2/.pre-commit-config.yaml"
+check "preflight.sh 可执行" test -x "$R2/scripts/preflight.sh"
+check "preflight.sh --help 正常" bash "$R2/scripts/preflight.sh" --help
+check "preflight 里挂了 pwsh 冒烟（无 pwsh 时自动跳过）" grep -q 'smoke.ps1' "$R2/scripts/preflight.sh"
 check "Codex 清单 skills 指向目录（官方规范）" grep -q '"skills": "./skills/"' "$R2/.codex-plugin/plugin.json"
 check "Claude 清单 skills 列出全部 skill" grep -q './skills/code-review' "$R2/.claude-plugin/plugin.json"
 check "每个 skill 有 agents/openai.yaml" test -f "$R2/skills/code-review/agents/openai.yaml"
@@ -276,6 +293,56 @@ refute "frontmatter 混入旧字段 → 检查失败" "$R2/scripts/validate-pack
 rm -rf "$R2/skills/fake-skill"
 "$R2/scripts/sync-plugin-skills.sh" >/dev/null 2>&1
 check "移除 skill 后清单回同步" "$R2/scripts/validate-package.sh"
+
+echo "== 15. 策略档位 --profile =="
+refute "--profile team 与 --link 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-c1" --profile team --link --yes
+refute "--profile personal 与 --no-personal 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-c2" --profile personal --no-personal --yes
+refute "--profile 非法值被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-c3" --profile nope --yes
+check "被拒绝的档位没有在项目里留垃圾" test ! -e "$TMP_ROOT/proj-c1/.vibe-rules"
+
+PT="$TMP_ROOT/proj-team"
+mkdir -p "$PT"
+printf 'node_modules/\n' > "$PT/.gitignore"
+check "install --profile team" "$R2/scripts/install.sh" "$PT" --profile team --agents "1" --yes
+check "team：证据文件 profile=team" grep -q '^profile=team$' "$PT/.vibe-rules/installed"
+check "team：模式仍是 embedded" grep -q '^mode=embedded$' "$PT/.vibe-rules/installed"
+refute "team：副本不含 personal/" test -d "$PT/.vibe-rules/personal"
+check "team：引用块标注个人层跳过" grep -q '未包含' "$PT/AGENTS.md"
+check "team：verify 通过" "$R2/scripts/verify.sh" "$PT"
+
+# update 要沿用档位，不能把团队档刷成默认档
+printf '\n# 档位沿用测试\n' >> "$R2/global/anti-patterns.md"
+"$R2/scripts/update.sh" "$PT" >/dev/null 2>&1
+check "team：update 后新规则进副本" grep -q '档位沿用测试' "$PT/.vibe-rules/global/anti-patterns.md"
+check "team：update 沿用档位（profile=team）" grep -q '^profile=team$' "$PT/.vibe-rules/installed"
+refute "team：update 后仍然不含 personal/" test -d "$PT/.vibe-rules/personal"
+
+# team 档 + .gitignore 把副本排除掉 = 违背团队档，安装时提醒、verify 报错
+printf '.vibe-rules/\n' >> "$PT/.gitignore"
+TEAM_OUT="$("$R2/scripts/install.sh" "$PT" --profile team --agents "1" --yes 2>&1)"
+check "team：装的时候提醒副本被 .gitignore 排除" has "$TEAM_OUT" "团队档提醒"
+refute "team：.gitignore 忽略副本 → verify 报错" "$R2/scripts/verify.sh" "$PT"
+
+PP="$TMP_ROOT/proj-personal"
+mkdir -p "$PP"
+check "install --profile personal" "$R2/scripts/install.sh" "$PP" --profile personal --agents "1" --yes
+check "personal：证据文件 profile=personal" grep -q '^profile=personal$' "$PP/.vibe-rules"
+check "personal：模式是 link" grep -q '^mode=link$' "$PP/.vibe-rules"
+refute "personal：规则本体没进项目" test -d "$PP/.vibe-rules"
+check "personal：规则没进项目（项目里只有证据文件）" test -f "$PP/.vibe-rules"
+check "personal：verify 通过（未忽略只警告）" "$R2/scripts/verify.sh" "$PP"
+"$R2/scripts/update.sh" "$PP" >/dev/null 2>&1
+check "personal：update 沿用档位（profile=personal）" grep -q '^profile=personal$' "$PP/.vibe-rules"
+printf '.vibe-rules\n' > "$PP/.gitignore"
+check "personal：加了 .gitignore 后 verify 仍通过" "$R2/scripts/verify.sh" "$PP"
+
+# 显式选项可以覆盖沿用（把 personal 档切回团队档）
+# 先摘掉 .gitignore 里的 .vibe-rules——团队档要求副本能进仓库，留着 verify 就该报错
+rm -f "$PP/.gitignore"
+check "personal → team：显式 --profile team 覆盖沿用" "$R2/scripts/install.sh" "$PP" --profile team --agents "1" --yes
+check "覆盖后模式变 embedded" grep -q '^mode=embedded$' "$PP/.vibe-rules/installed"
+check "覆盖后档位变 team" grep -q '^profile=team$' "$PP/.vibe-rules/installed"
+check "覆盖后 verify 通过" "$R2/scripts/verify.sh" "$PP"
 
 chmod 644 "$R2/CHANGELOG.md" 2>/dev/null || true
 check "bump-version.sh 可执行" test -x "$R2/scripts/bump-version.sh"

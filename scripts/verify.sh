@@ -121,6 +121,64 @@ else
   done
 fi
 
+# ---------- 2b. 策略档位（本地/团队策略有没有真的落实） ----------
+PROFILE="$(sed -n 's/^profile=//p' "$EVIDENCE" | head -n 1)"
+if [ -z "$PROFILE" ]; then
+  PROFILE="default"   # 兼容旧版证据文件（没有 profile 字段）
+fi
+
+IGNORES_VIBE=false
+if [ -f ".gitignore" ] && grep -qE '^[[:space:]]*/?\.vibe-rules/?[[:space:]]*$' .gitignore; then
+  IGNORES_VIBE=true
+fi
+
+case "$PROFILE" in
+  default)
+    ok "策略档位：default（未指定，按细粒度选项走）"
+    ;;
+  team)
+    ok "策略档位：team（团队共享）"
+    if [ "$MODE" != "embedded" ]; then
+      bad "团队档要求自包含副本模式，实际是 ${MODE}（重跑 install.sh --profile team）"
+    fi
+    if [ -d "$PROJECT_ROOT/.vibe-rules/personal" ]; then
+      bad "团队档副本里不该有 personal/（个人偏好会跟着进仓库；重跑 install.sh --profile team）"
+    else
+      ok "团队档：副本不含 personal/"
+    fi
+    if [ "$IGNORES_VIBE" = true ]; then
+      bad "团队档：.gitignore 忽略了 .vibe-rules/，副本进不了仓库（队友/云端/CI 读不到）"
+    else
+      ok "团队档：.vibe-rules/ 没有被 .gitignore 排除"
+    fi
+    ;;
+  personal)
+    ok "策略档位：personal（个人自用）"
+    if [ "$MODE" != "link" ]; then
+      bad "个人档要求外链模式，实际是 ${MODE}（重跑 install.sh --profile personal）"
+    fi
+    if [ "$IGNORES_VIBE" = false ]; then
+      warn "个人档：.vibe-rules 没被 .gitignore 忽略，本机路径会被提交（加一行 .vibe-rules 即可）"
+    else
+      ok "个人档：.vibe-rules 已被 .gitignore 忽略"
+    fi
+    ;;
+  *)
+    bad "证据文件 profile 值无效：${PROFILE}（应为 team / personal / default）"
+    ;;
+esac
+
+# 项目文档约定（规格驱动）：副本模式下由 install 建档
+if [ "$MODE" = "embedded" ]; then
+  for docdir in docs/specs docs/plans; do
+    if [ -f "$PROJECT_ROOT/$docdir/README.md" ]; then
+      ok "文档约定已就位：$docdir/README.md"
+    else
+      warn "缺少 $docdir/README.md（重跑 install.sh 会建档，且不会覆盖已有内容）"
+    fi
+  done
+fi
+
 # ---------- 3. AGENTS.md 引用块 ----------
 if [ -f "AGENTS.md" ]; then
   ok "项目根有 AGENTS.md"

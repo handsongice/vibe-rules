@@ -70,6 +70,8 @@ scripts/install.sh <项目路径> [选项]
   --link           外链模式：规则本体留在本机规则库，项目里只放入口 + 绝对路径引用
                    （默认是自包含副本模式；规则不便进仓库时用）
   --no-personal    副本里不含 personal/（个人偏好与记忆不跟着项目仓库走）
+  --profile team     团队档 = 自包含副本 + 不含 personal/ + 自查副本能不能真进仓库
+  --profile personal 个人档 = 外链模式（规则不进仓库），个人层照常带上
   --copy           用复制文件代替 symlink（symlink 被 Windows/Git 限制时用）
   --yes            非交互（不带 --agents 时等价于 --all，CI / 批量接入用）
   --help           查看全部参数
@@ -83,6 +85,22 @@ scripts/install.sh <项目路径> [选项]
 |---|---|---|---|
 | **自包含副本（默认）** | 直接 install | 项目内 `.vibe-rules/`，跟着仓库提交 | 团队协作、云端 agent、CI、多机器——clone 就能用 |
 | **外链** | 加 `--link` | 本机规则库（引用块写绝对路径） | 规则不想进仓库、只有自己用（换机器/云端会读不到） |
+
+**两种策略档位（`--profile`，把"本地/团队策略"收进脚本，不靠人记）**：
+
+| 档位 | 装法 | 规则去哪 | 个人层 | 适合 |
+|---|---|---|---|---|
+| `team` | `install.sh <项目> --profile team` | 项目内 `.vibe-rules/`，**跟着仓库提交** | 不带 | 团队协作、云端 agent、CI |
+| `personal` | `install.sh <项目> --profile personal` | 本机规则库（外链），不进仓库 | 带上 | 个人项目、不想公开规则 |
+
+档位会记进证据文件（`profile=`），`update` 自动沿用；`verify` 按档位校验——
+team 档会检查"副本里没有 `personal/`、且没被 `.gitignore` 排除"，personal 档会检查规则没落进项目。
+档位和 `--link` / `--no-personal` 冲突时直接报错，不猜。不传 `--profile` 就还是老样子（按细粒度选项走）。
+
+装完项目里还会多出两个目录（**只在不存在时建档，永不覆盖**）：
+
+- `docs/specs/` —— 设计文档（spec）写这里，对应 `brainstorming` skill
+- `docs/plans/` —— 实现计划（plan）写这里，对应 `writing-plans` skill
 
 > **升级须知**：老项目如果当初是旧版（外链方式）接入的，重跑新版 `install` 后默认**升级为副本模式**——规则库复制进项目 `.vibe-rules/`、引用块改写为相对路径，旧的 `.vibe-rules` 证据文件会自动替换成 `.vibe-rules/installed`（不会误删你自己的文件：`.vibe-rules` 若不是 vibe-rules 生成的证据文件，install 会拒绝并提示）。想继续保持"规则不进仓库"，重跑时加 `--link`。
 
@@ -190,6 +208,8 @@ your-project/
 | 个人开发偏好 | `personal/preferences.md` | "函数名用动词开头" |
 | 新项目或新发现的工作流 | `skills/` | "code-review 流程" |
 | 某个项目特有的坑 | 项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式） | "这个项目的缓存策略" |
+| 设计文档（spec） | 项目内 `docs/specs/YYYY-MM-DD-<topic>.md` | "支付回调重试的设计取舍" |
+| 实现计划（plan） | 项目内 `docs/plans/YYYY-MM-DD-<feature>.md` | "把 X 拆成 5 个任务" |
 | 还没想好归哪 | `inbox/` | 稍后再整理 |
 
 > 注意：项目副本里的 `global/`、`languages/`、`skills/`、`personal/` 是规则库的**拷贝**，在项目里改不会同步回规则库。跨项目通用的沉淀请去规则库本体改，再 `update.sh` 刷副本；项目专属内容写在 `.vibe-rules/project/README.md`，它属于项目，不会被覆盖。
@@ -300,6 +320,19 @@ pwsh tests\smoke.ps1
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
 `--purge-project` 删项目笔记。bash 版目前 93 项断言（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
 
+一条命令全跑（没装 pwsh 会自动跳过 PS 那档，不算漏测）：
+
+```bash
+bash scripts/preflight.sh    # 打包校验 + 清单同步检查 + bash 冒烟 + pwsh 冒烟
+```
+
+想让它在你 `git commit` 前自动跑，装一下 [pre-commit](https://pre-commit.com/) 就行：
+`.pre-commit-config.yaml` 已经配好（纯本地 hook，不联网、不拉第三方仓库）：
+
+```bash
+pipx install pre-commit && pre-commit install
+```
+
 CI（`.github/workflows/smoke.yml`）会跑三档：
 
 | 环境 | 为什么 |
@@ -328,8 +361,9 @@ CI（`.github/workflows/smoke.yml`）会跑三档：
 - **看到好东西**：扔 `inbox/`，定期 review 转正
 - **项目特殊约定**：写到项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式）
 - **加了新 skill**：跑 `scripts/sync-plugin-skills.sh`，让插件清单跟上
-- **发版**：跑 `scripts/bump-version.sh 1.1.0`，同步 `VERSION`、插件清单和 `CHANGELOG.md`
-- **提交前自检**：`scripts/validate-package.sh` + `tests/smoke.sh`
+- **发版**：跑 `scripts/bump-version.sh 1.1.0`，同步 `VERSION`、插件清单和 `CHANGELOG.md`，
+  再往 `RELEASE-NOTES.md` 补一段"使用者视角"的说明（改了啥、要做什么、有没有破坏性变更）
+- **提交前自检**：`bash scripts/preflight.sh`（或装 pre-commit，让它每次提交自动跑）
 - **改了就 commit**
 
 ---
