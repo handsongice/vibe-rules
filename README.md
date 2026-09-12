@@ -34,8 +34,8 @@ git clone https://github.com/handsongice/vibe-rules.git ~/.vibe
 
 # 3. 老项目接入
 cd ~/code/your-old-project
-cp ~/.vibe/templates/AGENTS.md .
 ~/.vibe/scripts/install.sh
+# install.sh 会自动处理 AGENTS.md：没有就复制模板，有了就检查是否引用全局库
 ```
 
 完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。

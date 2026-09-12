@@ -8,11 +8,16 @@ set -euo pipefail
 VIBE_HOME="${VIBE_HOME:-$HOME/.vibe}"
 PROJECT_ROOT="${1:-$(pwd)}"
 
+# —— AGENTS.md 兜底：没有就从模板复制，有了就检查是否引用全局库 ——
 if [ ! -f "$PROJECT_ROOT/AGENTS.md" ]; then
-  echo "❌  $PROJECT_ROOT/AGENTS.md 不存在。"
-  echo "   先用 cp $VIBE_HOME/templates/AGENTS.md $PROJECT_ROOT/AGENTS.md，"
-  echo "   或运行 $VIBE_HOME/scripts/new-project.sh <path>"
-  exit 1
+  cp "$VIBE_HOME/templates/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
+  echo "📝 从模板创建 $PROJECT_ROOT/AGENTS.md（记得填项目信息）"
+else
+  # 已有 AGENTS.md，检查是否已经引用了全局库
+  if ! grep -q '\.vibe' "$PROJECT_ROOT/AGENTS.md" 2>/dev/null; then
+    echo "⚠️  $PROJECT_ROOT/AGENTS.md 已存在，但没引用 ~/.vibe 全局库。"
+    echo "   在文件开头加一行：先读全局规范库 ~/.vibe/README.md"
+  fi
 fi
 
 cd "$PROJECT_ROOT"
