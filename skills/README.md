@@ -73,3 +73,6 @@ applies_to: [java, python, nodejs, vue, react]  # 或 all
 
 **跨会话：**
 - `handoff/` —— 换 agent / 新开会话前，写紧凑交接文档
+
+**前端视觉：**
+- `frontend-taste/` —— 做落地页/作品集/营销页时，避免 AI 塑料感（黑名单 + 自检表）
