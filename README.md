@@ -42,8 +42,13 @@
 - `languages/react.md` —— React / Next.js / Vite
 
 ### 可复用工作流（`skills/<name>/SKILL.md`）
-- `skills/code-review/` —— 提交前自审清单
-- `skills/debug-production/` —— 生产问题排查流程
+按顺序用：
+- `skills/brainstorming/` —— 动手前聊清需求（spike / bounded / architectural 三档）
+- `skills/writing-plans/` —— 多步任务写实现计划
+- `skills/test-driven-development/` —— 先写失败测试再写实现
+- `skills/systematic-debugging/` —— 找根因，不猜
+- `skills/debug-production/` —— 线上问题止血与排查
+- `skills/code-review/` —— 提交前自审
 - `skills/pre-commit-check/` —— commit 前必跑项
 
 ### 项目专属（`projects/<project-slug>/`）

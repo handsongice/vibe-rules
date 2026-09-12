@@ -58,6 +58,15 @@ applies_to: [java, python, nodejs, vue, react]  # 或 all
 
 ## 现有 skills
 
+**需求 → 设计 → 实现（按顺序用）：**
+- `brainstorming/` —— 动手前把需求聊清楚，三档分级（spike / bounded / architectural）
+- `writing-plans/` —— 多步任务写实现计划，任务切到 2-5 分钟一步
+- `test-driven-development/` —— RED-GREEN-REFACTOR，先写失败测试
+
+**问题处理：**
+- `systematic-debugging/` —— 本地/通用调试，四阶段找根因，3 次失败质疑架构
+- `debug-production/` —— 线上问题排查（区别于本地调试）
+
+**交付前：**
 - `code-review/` —— 提交前自审
-- `debug-production/` —— 生产问题排查
 - `pre-commit-check/` —— commit 前必跑项
