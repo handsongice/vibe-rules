@@ -59,19 +59,41 @@ pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
 
 ## 支持的 agent
 
-通过 `AGENTS.md` 事实标准 + symlink 分发，一次配置全 agent 生效：
+一次安装，覆盖 15+ 个主流 coding agent。脚本会在项目根目录建好所有入口文件，不管你用哪个工具打开项目，它都能自动读到规则。
+
+### 单文件型（symlink 指向 AGENTS.md）
 
 | Agent | 入口文件 |
 |---|---|
-| Codex / Qoder / pi / Aider / Windsurf / Gemini CLI | 根目录 `AGENTS.md` |
-| Claude Code | `CLAUDE.md`（symlink） |
-| Cursor | `.cursorrules`（symlink） |
-| CodeBuddy | `CODEBUDDY.md`（symlink） |
-| Trae | `.trae/rules/00-project-entry.md` |
+| Claude Code | `CLAUDE.md` |
+| Cursor（旧版） | `.cursorrules` |
+| Windsurf（旧版） | `.windsurfrules` |
 | GitHub Copilot | `.github/copilot-instructions.md` |
-| pi（全局） | `~/.pi/agent/AGENTS.md` |
+| Cline | `.clinerules` |
+| Roo Code（旧版） | `.roorules` |
+| Aider | `CONVENTIONS.md` |
+| Gemini CLI | `GEMINI.md` |
+| CodeBuddy（旧版） | `CODEBUDDY.md` |
 
-DeepSeek Harness 是插件式 runtime，单独配置即可。
+### 目录型（wrapper 文件，自动指向 AGENTS.md）
+
+| Agent | 目录 |
+|---|---|
+| Cursor（新版） | `.cursor/rules/` |
+| Windsurf（新版） | `.windsurf/rules/` |
+| Trae | `.trae/rules/` |
+| Qoder | `.qoder/rules/` |
+| CodeBuddy（新版） | `.codebuddy/rules/` |
+| Continue | `.continue/rules/` |
+| Roo Code（新版） | `.roo/rules/` |
+| Kiro | `.kiro/steering/` |
+| Amazon Q | `.amazonq/rules/` |
+
+### 原生读 AGENTS.md
+
+Codex CLI、OpenCode、pi、Zed、Vibe 等新工具直接读根目录 `AGENTS.md`，无需额外配置。
+
+**换工具不用重配**：今天用 Cursor，明天换 Trae，后天换 Claude Code，规则都在。脚本建的入口文件是幂等的，随时可重跑。
 
 ## 目录结构
 
