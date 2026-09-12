@@ -26,23 +26,19 @@
 ## 30 秒开始
 
 ```bash
-# 1. clone 到任意路径（不一定非要 ~/.vibe）
-git clone https://github.com/handsongice/vibe-rules.git ~/Downloads/vibe-rules
+# 1. clone 到任意路径
+git clone https://github.com/handsongice/vibe-rules.git ~/code/vibe-rules
 
-# 2. 在 clone 目录里跑 setup（只跑一次）
-cd ~/Downloads/vibe-rules
-./scripts/setup.sh
-# 它会建 ~/.vibe 软链指向你 clone 的路径
+# 2. 老项目接入（直接调用规则库里的脚本，不用 setup）
+~/code/vibe-rules/scripts/install.sh /path/to/your-project
 
-# 3. 以后在任何项目里接入
-~/.vibe/scripts/install.sh /path/to/your-project
-# 或者初始化新项目：
-~/.vibe/scripts/new-project.sh /path/to/new-project
+# 3. 或者初始化新项目
+~/code/vibe-rules/scripts/new-project.sh /path/to/new-project
 ```
 
 完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。
 
-想换个路径放规则库？把 `~/.vibe` 软链删了，重新跑 setup 就行。
+规则库放哪都行，脚本会自动定位。挪了位置？重新跑一次 install 就行。
 
 ## 支持的 agent
 
@@ -63,7 +59,7 @@ DeepSeek Harness 是插件式 runtime，单独配置即可。
 ## 目录结构
 
 ```
-你的 clone 目录（任意位置，setup 后软链到 ~/.vibe）
+vibe-rules/（你 clone 到的任意路径）
 ├── README.md              # 本文件（agent 第一读这个）
 ├── global/                # 通用规范
 │   ├── iron-rules.md      # 六条铁律展开
