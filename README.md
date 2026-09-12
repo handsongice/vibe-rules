@@ -100,22 +100,50 @@ Codex CLI、OpenCode、pi、Zed、Vibe 等新工具直接读根目录 `AGENTS.md
 ```
 vibe-rules/（你 clone 到的任意路径）
 ├── README.md              # 本文件（agent 第一读这个）
-├── global/                # 通用规范
+├── global/                # 通用规范（开源部分）
 │   ├── iron-rules.md      # 六条铁律展开
 │   ├── coding-principles.md  # 四原则 + 七步决策梯子
 │   ├── writing-for-agents.md  # 怎么给 agent 写文档
 │   ├── git-workflow.md    # 分支/commit/merge
 │   ├── testing.md         # 测试要求
 │   ├── security.md        # 安全底线
-│   └── anti-patterns.md  # 踩坑记录（最重要）
+│   └── anti-patterns.md  # 踩坑记录
+├── personal/              # 【你的沉淀】个人偏好和记忆点
+│   ├── preferences.md     # 跨项目通用的开发偏好
+│   ├── memory.md         # 跨项目踩坑和经验
+│   └── notes.md          # 随手记
 ├── languages/             # 按技术栈
 │   ├── java.md  python.md  nodejs.md  vue.md  react.md
-├── skills/                # 可复用工作流
-│   ├── brainstorming/  writing-plans/  test-driven-development/
-│   ├── systematic-debugging/  debug-production/  code-review/
-│   ├── pre-commit-check/  handoff/
-│   ├── frontend-taste/  plain-writing/
-├── projects/              # 每个项目自己的规范
+├── skills/                # 可复用工作流（你自己加的也放这）
+├── projects/              # 项目专属沉淀
+│   └── <项目名>/          # 每个项目一个目录
+└── scripts/               # 安装/迁移/验证脚本
+```
+
+## 日常怎么沉淀
+
+开发过程中积累的东西，按类型放：
+
+| 类型 | 放哪 | 例子 |
+|---|---|---|
+| 跨项目通用的踩坑 | `personal/memory.md` | "Java 序列化要注意..." |
+| 个人开发偏好 | `personal/preferences.md` | "函数名用动词开头" |
+| 新项目或新发现的工作流 | `skills/` | "code-review 流程" |
+| 某个项目特有的坑 | `projects/<项目名>/` | "这个项目的缓存策略" |
+| 还没想好归哪 | `inbox/` | 稍后再整理 |
+
+## 项目间迁移
+
+把 A 项目沉淀好的内容迁到 B 项目：
+
+```bash
+/path/to/vibe-rules/scripts/migrate.sh 旧项目slug 新项目slug
+```
+
+脚本会：
+- 目标没有的文件：直接复制
+- 目标已有但内容不同：diff 后让你选（覆盖/跳过/查看差异）
+- 不会静默覆盖
 ├── templates/AGENTS.md     # 新项目模板
 ├── scripts/
 │   ├── install.sh         # 幂等 symlink 分发
