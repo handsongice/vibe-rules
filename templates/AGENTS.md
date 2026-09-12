@@ -10,7 +10,7 @@
 3. 全局库中对应技术栈的文件：`~/.vibe/languages/<tech>.md`（按本项目实际栈）。
 4. 全局踩坑库：`~/.vibe/global/anti-patterns.md` 最新 10 条。
 
-> 路径在你环境中可能不是 `/Users/jiyong/.vibe/`，用 `~/.vibe/` 或 `$HOME/.vibe/` 访问。
+> 全局规范库路径在你环境中可能不同，用 `~/.vibe/` 或 `$HOME/.vibe/` 访问。
 
 ---
 
