@@ -33,3 +33,13 @@
 - 不要在别人没让你 `git push` 的时候 push。
 - 不要 `git commit --amend` 已经 push 到远端的 commit。
 - 不要 rebase 别人正在用的共享分支。
+
+## 解 merge / rebase 冲突
+
+1. **先看状态**：`git status`、冲突文件、相关的 commit 历史。
+2. **找源头**：每个冲突块背后为什么改？读 commit message、PR、issue。理解双方意图，不要凭代码猜。
+3. **逐块解决**：尽量保留双方意图。真冲突时，按本次 merge 的目标选一边，并在 commit message 里记下 trade-off。**不要凭空发明新行为。**
+4. **跑完自动化检查**：typecheck → 测试 → lint/format。merge 弄坏的都修。
+5. **收尾**：`git add` + commit；rebase 的话继续 `git rebase --continue` 直到全部完。
+
+**不要**：直接 `--abort` 就算了；不要选一边然后忽略另一边的意图；不要把冲突解决了但不跑测试就 commit。

@@ -29,7 +29,8 @@
 ### 通用（`global/`）
 - `global/iron-rules.md` —— 本文件 §2 的展开版与例外情况
 - `global/coding-principles.md` —— **四条行为原则**（想清楚再写/简单优先/外科手术式改动/目标驱动），动手前必读
-- `global/git-workflow.md` —— 分支、commit message、PR 规范
+- `global/writing-for-agents.md` —— **元规范**：怎么给这个库加新文件、写 AGENTS.md、写 skill
+- `global/git-workflow.md` —— 分支、commit message、PR、merge 冲突
 - `global/testing.md` —— 测试要求与最低标准
 - `global/security.md` —— 输入校验、依赖、密钥、常见漏洞
 - `global/anti-patterns.md` —— **踩坑记录（最重要）**，按时间倒序，新任务前先扫最新 10 条
@@ -50,6 +51,7 @@
 - `skills/debug-production/` —— 线上问题止血与排查
 - `skills/code-review/` —— 提交前自审
 - `skills/pre-commit-check/` —— commit 前必跑项
+- `skills/handoff/` —— 换 agent / 新开会话前写交接文档
 
 ### 项目专属（`projects/<project-slug>/`）
 - 每个项目一个子目录，记录该项目的架构、特殊约定、历史坑。

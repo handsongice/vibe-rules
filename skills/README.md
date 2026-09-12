@@ -70,3 +70,6 @@ applies_to: [java, python, nodejs, vue, react]  # 或 all
 **交付前：**
 - `code-review/` —— 提交前自审
 - `pre-commit-check/` —— commit 前必跑项
+
+**跨会话：**
+- `handoff/` —— 换 agent / 新开会话前，写紧凑交接文档
