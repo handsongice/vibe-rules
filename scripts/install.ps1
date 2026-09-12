@@ -2,13 +2,11 @@
 #
 # 用法：
 #   pwsh C:\path\to\vibe-rules\scripts\install.ps1 [项目路径]
-#   pwsh C:\path\to\vibe-rules\scripts\install.ps1 --all [项目路径]
 #
 # 交互式：列出所有支持的 agent，你选哪个就生成哪个。
 
 param(
-    [string]$ProjectRoot = ".",
-    [switch]$All
+    [string]$ProjectRoot = "."
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,23 +14,21 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VibeHome = Resolve-Path (Join-Path $ScriptDir "..")
 
-# 支持的 agent
+# 支持的 agent：num | name | type | path | 官方文档
+# type: native=原生读AGENTS.md, single=symlink, dir=目录型wrapper
 $Agents = @(
-    @{num=1; name="Claude Code"; type="single"; path="CLAUDE.md"},
-    @{num=2; name="Cursor"; type="single"; path=".cursorrules"},
-    @{num=3; name="Cursor（新版规则）"; type="dir"; path=".cursor/rules/.mdc"},
-    @{num=4; name="Windsurf"; type="single"; path=".windsurfrules"},
-    @{num=5; name="GitHub Copilot"; type="single"; path=".github/copilot-instructions.md"},
-    @{num=6; name="Cline"; type="single"; path=".clinerules"},
-    @{num=7; name="Roo Code"; type="single"; path=".roorules"},
-    @{num=8; name="Aider"; type="single"; path="CONVENTIONS.md"},
-    @{num=9; name="Gemini CLI"; type="single"; path="GEMINI.md"},
-    @{num=10; name="Trae"; type="dir"; path=".trae/rules/.md"},
-    @{num=11; name="Qoder"; type="dir"; path=".qoder/rules/.md"},
-    @{num=12; name="CodeBuddy"; type="single"; path="CODEBUDDY.md"},
-    @{num=13; name="Continue"; type="dir"; path=".continue/rules/.md"},
-    @{num=14; name="Kiro"; type="dir"; path=".kiro/steering/.md"},
-    @{num=15; name="Amazon Q"; type="dir"; path=".amazonq/rules/.md"}
+    @{num=1;  name="Claude Code";       type="single"; path="CLAUDE.md"},
+    @{num=2;  name="Codex CLI";          type="native"; path="AGENTS.md"},
+    @{num=3;  name="Cursor";            type="single"; path=".cursorrules"},
+    @{num=4;  name="Cursor（新版规则）"; type="dir";    path=".cursor/rules/00-project-entry.mdc"},
+    @{num=5;  name="Qoder";             type="dir";    path=".qoder/rules/00-project-entry.md"},
+    @{num=6;  name="Trae";              type="dir";    path=".trae/rules/00-project-entry.md"},
+    @{num=7;  name="CodeBuddy";         type="dir";    path=".codebuddy/rules/project-entry/RULE.mdc"},
+    @{num=8;  name="Hermes";            type="native"; path="AGENTS.md"},
+    @{num=9;  name="Kimi Code";         type="native"; path="AGENTS.md"},
+    @{num=10; name="DeepSeek Harness";  type="native"; path="AGENTS.md"},
+    @{num=11; name="Windsurf";          type="single"; path=".windsurfrules"},
+    @{num=12; name="GitHub Copilot";   type="single"; path=".github/copilot-instructions.md"}
 )
 
 # 创建项目目录
@@ -60,22 +56,19 @@ if (-not (Test-Path $AgentsFile)) {
 Set-Location $ProjectRoot
 
 # 交互选择
-if ($All) {
+Write-Host "你用哪个 agent？输入编号（空格分隔多选），或输入 all 全选："
+Write-Host ""
+foreach ($a in $Agents) {
+    Write-Host ("  {0,2}. {1}" -f $a.num, $a.name)
+}
+Write-Host ""
+$choice = Read-Host "选择"
+
+if ($choice -eq "all") {
     $Selected = $Agents
 } else {
-    Write-Host "你用哪个 agent？输入编号（空格分隔多选），或输入 all 全选："
-    Write-Host ""
-    foreach ($a in $Agents) {
-        Write-Host ("  {0,2}. {1}" -f $a.num, $a.name)
-    }
-    Write-Host ""
-    $choice = Read-Host "选择"
-    if ($choice -eq "all") {
-        $Selected = $Agents
-    } else {
-        $nums = $choice -split '\s+'
-        $Selected = $Agents | Where-Object { $nums -contains $_.num.ToString() }
-    }
+    $nums = $choice -split '\s+'
+    $Selected = $Agents | Where-Object { $nums -contains $_.num.ToString() }
 }
 
 Write-Host ""
@@ -108,8 +101,8 @@ function Write-Wrapper {
     Remove-Item $Path -Force -ErrorAction SilentlyContinue
     $content = @"
 ---
-trigger: always_on
 description: $Note
+alwaysApply: true
 ---
 
 # 项目入口
@@ -122,18 +115,17 @@ description: $Note
 }
 
 foreach ($a in $Selected) {
-    if ($a.type -eq "single") {
+    if ($a.type -eq "native") {
+        Write-Host "  ℹ️  $($a.name) 原生读 AGENTS.md，无需额外文件"
+    } elseif ($a.type -eq "single") {
         if ($a.path -eq ".github/copilot-instructions.md") {
             if (-not (Test-Path ".github")) { New-Item -ItemType Directory ".github" | Out-Null }
             Link-AgentFile "../AGENTS.md" $a.path
         } else {
             Link-AgentFile "AGENTS.md" $a.path
         }
-    } else {
-        $dir = Split-Path -Parent $a.path
-        $ext = [IO.Path]::GetExtension($a.path).TrimStart('.')
-        $wrapper = "$dir/00-project-entry.$ext"
-        Write-Wrapper $wrapper "$($a.name) 项目入口规则"
+    } elseif ($a.type -eq "dir") {
+        Write-Wrapper $a.path "$($a.name) 项目入口规则"
     }
 }
 

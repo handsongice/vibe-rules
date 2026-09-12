@@ -52,28 +52,15 @@ function Remove-Wrapper {
 
 # 单文件型
 Remove-Link "CLAUDE.md"
-Remove-Link "CODEBUDDY.md"
-Remove-Link "GEMINI.md"
-Remove-Link "CONVENTIONS.md"
 Remove-Link ".cursorrules"
 Remove-Link ".windsurfrules"
-Remove-Link ".clinerules"
-Remove-Link ".roorules"
 Remove-Link ".github\copilot-instructions.md"
 
 # 目录型
 Remove-Wrapper ".cursor\rules\00-project-entry.mdc"
-Remove-Wrapper ".windsurf\rules\00-project-entry.md"
-Remove-Wrapper ".trae\rules\00-project-entry.md"
 Remove-Wrapper ".qoder\rules\00-project-entry.md"
-Remove-Wrapper ".codebuddy\rules\00-project-entry.md"
-Remove-Wrapper ".continue\rules\00-project-entry.md"
-Remove-Wrapper ".roo\rules\00-project-entry.md"
-Remove-Wrapper ".kiro\steering\00-project-entry.md"
-Remove-Wrapper ".amazonq\rules\00-project-entry.md"
-Remove-Wrapper ".hermes\rules\00-project-entry.md"
-Remove-Wrapper ".kimi\rules\00-project-entry.md"
-Remove-Wrapper ".dsh\rules\00-project-entry.md"
+Remove-Wrapper ".trae\rules\00-project-entry.md"
+Remove-Wrapper ".codebuddy\rules\project-entry\RULE.mdc"
 
 # 证据文件
 if (Test-Path ".vibe-rules") {
