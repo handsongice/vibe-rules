@@ -196,6 +196,17 @@ if [ "$MODE" = "embedded" ]; then
     exit 1
   fi
 
+  # 旧版把证据文件写成项目根的 .vibe-rules（普通文件），会挡住副本目录：识别并升级掉
+  if [ -e "$RULES_DIR" ] && [ ! -d "$RULES_DIR" ]; then
+    if grep -q '^rules_home=' "$RULES_DIR" 2>/dev/null; then
+      echo "🧹 检测到旧版证据文件 .vibe-rules（外链时代遗留），升级为副本目录"
+      rm -f "$RULES_DIR"
+    else
+      echo "❌ ${RULES_DIR} 已存在且不是 vibe-rules 生成的证据文件，请先手动处理后重试"
+      exit 1
+    fi
+  fi
+
   echo "📄 复制规则副本 → $RULES_DIR"
   mkdir -p "$RULES_DIR"
   # project/ 是项目专属笔记，必须排除在 --delete 之外（否则更新会把笔记删掉）

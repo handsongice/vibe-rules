@@ -140,6 +140,18 @@ if ($Mode -eq "embedded") {
         exit 1
     }
 
+    # 旧版把证据文件写成项目根的 .vibe-rules（普通文件），会挡住副本目录：识别并升级掉
+    if ((Test-Path -LiteralPath $RulesDir) -and -not (Test-Path -LiteralPath $RulesDir -PathType Container)) {
+        $legacyText = Get-Content -LiteralPath $RulesDir -Raw -ErrorAction SilentlyContinue
+        if ($legacyText -match "(?m)^rules_home=") {
+            Write-Host "🧹 检测到旧版证据文件 .vibe-rules（外链时代遗留），升级为副本目录"
+            Remove-Item -LiteralPath $RulesDir -Force
+        } else {
+            Write-Host "❌ $RulesDir 已存在且不是 vibe-rules 生成的证据文件，请先手动处理后重试"
+            exit 1
+        }
+    }
+
     Write-Host "📄 复制规则副本 → $RulesDir"
     New-Item -ItemType Directory -Path $RulesDir -Force | Out-Null
 

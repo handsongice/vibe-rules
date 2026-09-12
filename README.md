@@ -84,6 +84,8 @@ scripts/install.sh <项目路径> [选项]
 | **自包含副本（默认）** | 直接 install | 项目内 `.vibe-rules/`，跟着仓库提交 | 团队协作、云端 agent、CI、多机器——clone 就能用 |
 | **外链** | 加 `--link` | 本机规则库（引用块写绝对路径） | 规则不想进仓库、只有自己用（换机器/云端会读不到） |
 
+> **升级须知**：老项目如果当初是旧版（外链方式）接入的，重跑新版 `install` 后默认**升级为副本模式**——规则库复制进项目 `.vibe-rules/`、引用块改写为相对路径，旧的 `.vibe-rules` 证据文件会自动替换成 `.vibe-rules/installed`（不会误删你自己的文件：`.vibe-rules` 若不是 vibe-rules 生成的证据文件，install 会拒绝并提示）。想继续保持"规则不进仓库"，重跑时加 `--link`。
+
 装完之后的日常操作（sh / ps1 同名，Windows 用 `update.ps1` 这种写法）：
 
 ```bash

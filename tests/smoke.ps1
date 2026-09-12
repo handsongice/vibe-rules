@@ -174,6 +174,25 @@ try {
     Check "引用块标注个人层跳过" { (Raw (Join-Path $P9 "AGENTS.md")).Contains("未包含") }
     Check "verify 通过（personal 缺失只警告）" { (Run-Script $Verify @($P9)) -eq 0 }
 
+    Write-Host "== 9b. 旧版证据文件升级 =="
+    $P9b = Join-Path $TmpRoot "proj-upgrade"
+    New-Item -ItemType Directory -Path $P9b -Force | Out-Null
+    $legacyEvidence = "rules_home=$R1`nrules_version=old`ninstalled_at=2026-01-01`nproject=$P9b`nagents=2`n"
+    [System.IO.File]::WriteAllText((Join-Path $P9b ".vibe-rules"), $legacyEvidence, (New-Object System.Text.UTF8Encoding($false)))
+    $code = Run-Script $Install @($P9b, "-Yes")
+    Check "旧项目重跑 install 退出码 0" { $code -eq 0 }
+    Check "升级后 .vibe-rules 变成目录" { Test-Path (Join-Path $P9b ".vibe-rules") -PathType Container }
+    Check "升级后证据文件就位" { Test-Path (Join-Path $P9b ".vibe-rules/installed") }
+    Check "升级后副本入口就位" { Test-Path (Join-Path $P9b ".vibe-rules/README.md") }
+    Check "升级后引用块用相对路径" { (Raw (Join-Path $P9b "AGENTS.md")).Contains(".vibe-rules/README.md") }
+    Check "升级后 verify 通过" { (Run-Script $Verify @($P9b)) -eq 0 }
+    $P9c = Join-Path $TmpRoot "proj-unknown-dotfile"
+    New-Item -ItemType Directory -Path $P9c -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $P9c ".vibe-rules"), "my own notes`n", (New-Object System.Text.UTF8Encoding($false)))
+    $code = Run-Script $Install @($P9c, "-Yes")
+    Refute "未知 .vibe-rules 文件被拒绝（不误删用户文件）" { $code -eq 0 }
+    Check "被拒绝后用户文件原样保留" { (Raw (Join-Path $P9c ".vibe-rules")).Contains("my own notes") }
+
     Write-Host "== 10. 无效编号 =="
     $code = Run-Script $Install @((Join-Path $TmpRoot "proj-bad"), "-AgentNums", "99", "-Yes")
     Refute "无效编号被拒绝（退出码非 0）" { $code -eq 0 }

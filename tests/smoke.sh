@@ -144,6 +144,28 @@ refute "link 重跑后不含旧路径" grep -qF "$R2/" "$PL/AGENTS.md"
 check "搬家后 link verify 通过" "$R3/scripts/verify.sh" "$PL"
 R2="$R3"
 
+echo "== 5b. 老版本升级（旧证据文件 → 副本目录） =="
+PUP="$TMP_ROOT/proj-upgrade"
+mkdir -p "$PUP"
+cat > "$PUP/.vibe-rules" <<LEGACY
+rules_home=$R2
+rules_version=old
+installed_at=2026-01-01
+project=$PUP
+agents=2
+LEGACY
+check "旧项目重跑 install（默认升级为副本模式）" "$R2/scripts/install.sh" "$PUP" --yes
+check "升级后 .vibe-rules 变成目录" test -d "$PUP/.vibe-rules"
+check "升级后证据文件就位" test -f "$PUP/.vibe-rules/installed"
+check "升级后副本入口就位" test -f "$PUP/.vibe-rules/README.md"
+check "升级后引用块用相对路径" grep -qF '.vibe-rules/README.md' "$PUP/AGENTS.md"
+check "升级后 verify 通过" "$R2/scripts/verify.sh" "$PUP"
+PUP2="$TMP_ROOT/proj-unknown-dotfile"
+mkdir -p "$PUP2"
+printf 'my own notes\n' > "$PUP2/.vibe-rules"
+refute "未知 .vibe-rules 文件被拒绝（不误删用户文件）" "$R2/scripts/install.sh" "$PUP2" --yes
+check "被拒绝后用户文件原样保留" grep -q 'my own notes' "$PUP2/.vibe-rules"
+
 echo "== 6. --all / 无效编号 / --help =="
 P3="$TMP_ROOT/proj-all"
 "$R2/scripts/install.sh" "$P3" --all --yes >/dev/null 2>&1
