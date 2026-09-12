@@ -21,7 +21,7 @@ AGENTS=(
   "4|Cursor（新版规则）|dir|.cursor/rules/.mdc|.cursor/rules/ 目录"
   "5|Qoder|dir|.qoder/rules/.md|.qoder/rules/ 目录"
   "6|Trae|dir|.trae/rules/.md|.trae/rules/ 目录"
-  "7|CodeBuddy|dir|.codebuddy/rules/.md|.codebuddy/rules/ 目录"
+  "7|CodeBuddy|dir|.codebuddy/rules/project-entry/RULE.mdc|.codebuddy/rules/ 目录"
   "8|Hermes|dir|.hermes/rules/.md|.hermes/rules/ 目录"
   "9|Kimi Code|dir|.kimi/rules/.md|.kimi/rules/ 目录"
   "10|DeepSeek Harness|dir|.dsh/rules/.md|.dsh/rules/ 目录"
@@ -116,9 +116,9 @@ write_wrapper() {
   rm -f "$path"
 
   # 根据文件类型用不同的 frontmatter 格式
-  if [[ "$path" == *.mdc ]]; then
-    # Cursor .mdc 格式
-    cat > "$path" <<EOF
+  # .mdc = Cursor/CodeBuddy 格式，用 alwaysApply
+  # .md = Trae/Qoder 格式，也用 alwaysApply（官方文档确认）
+  cat > "$path" <<EOF
 ---
 description: $note
 alwaysApply: true
@@ -129,20 +129,6 @@ alwaysApply: true
 先读项目根目录的 \`AGENTS.md\`，再读规则库 \`$VIBE_HOME/README.md\`。
 不要凭记忆猜测项目约定，按这两个文件里写的来。
 EOF
-  else
-    # Trae / Qoder / Continue 等用 trigger 格式
-    cat > "$path" <<EOF
----
-trigger: always_on
-description: $note
----
-
-# 项目入口
-
-先读项目根目录的 \`AGENTS.md\`，再读规则库 \`$VIBE_HOME/README.md\`。
-不要凭记忆猜测项目约定，按这两个文件里写的来。
-EOF
-  fi
   echo "  ✅ $path"
 }
 
