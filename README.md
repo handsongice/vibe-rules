@@ -10,7 +10,7 @@
 - 文档/PR/commit 写出来一股 AI 味（"赋能""助力""打造闭环"）
 - 前端做出来一眼假：AI 紫渐变、Inter 字体、三个等大 card
 
-**Vibe Rules 解决这些问题。** 它是一份放在任意路径的 markdown 规则库（脚本会自动定位并记住位置），项目开始时所有 agent 自动读，把你的开发习惯、踩坑记录、审美偏好固定下来，不再每次重新教。
+**Vibe Rules 解决这些问题。** 它是一份放在任意路径的 markdown 规则库（脚本会自动定位并记住位置），接入项目时默认把规则副本复制进项目的 `.vibe-rules/`，项目开始时所有 agent 自动读，把你的开发习惯、踩坑记录、审美偏好固定下来，不再每次重新教。
 
 ## 它能做什么
 
@@ -56,9 +56,9 @@ pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
 > PS 脚本的 `-Help`（等价于 sh 版的 `--help`）可以查看参数；`-Yes` 非交互，`-AgentNums 1,4,7` 选 agent，
 > `-Copy` 强制复制模式。
 
-完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。
+完事。之后不管你用哪个 agent 打开这个项目，它都会自动读到这些规则。默认安装是**自包含副本模式**：规则副本就在项目的 `.vibe-rules/` 里、跟着仓库走——队友 clone 下来、云端 agent、CI 都能直接读到，不需要他们装任何东西，也不依赖你本机的规则库路径。
 
-规则库放哪都行，脚本会自动定位。挪了位置？重新跑一次 install 就行。
+规则库放哪都行，脚本会自动定位。规则库本体更新后（`git -C <规则库> pull`）跑一次 `scripts/update.sh <项目>`，就能把项目里的副本刷到最新，项目专属笔记永不覆盖。
 
 ### 常用参数（install / new-project 通用）
 
@@ -67,12 +67,31 @@ scripts/install.sh <项目路径> [选项]
 
   --all            给 12 个 agent 全部建入口
   --agents 1,4,7   只装指定编号的 agent（编号见“支持的 agent”一节，装完记在项目 .vibe-rules 里）
+  --link           外链模式：规则本体留在本机规则库，项目里只放入口 + 绝对路径引用
+                   （默认是自包含副本模式；规则不便进仓库时用）
+  --no-personal    副本里不含 personal/（个人偏好与记忆不跟着项目仓库走）
   --copy           用复制文件代替 symlink（symlink 被 Windows/Git 限制时用）
   --yes            非交互（不带 --agents 时等价于 --all，CI / 批量接入用）
   --help           查看全部参数
 ```
 
 不带任何选项时是交互式的：列出 12 个 agent，你输入编号或 `all`。
+
+**两种安装模式**：
+
+| 模式 | 怎么装 | 规则本体在哪 | 适合 |
+|---|---|---|---|
+| **自包含副本（默认）** | 直接 install | 项目内 `.vibe-rules/`，跟着仓库提交 | 团队协作、云端 agent、CI、多机器——clone 就能用 |
+| **外链** | 加 `--link` | 本机规则库（引用块写绝对路径） | 规则不想进仓库、只有自己用（换机器/云端会读不到） |
+
+装完之后的日常操作（sh / ps1 同名，Windows 用 `update.ps1` 这种写法）：
+
+```bash
+scripts/update.sh <项目>      # 规则库更新后刷副本；自动沿用安装时的模式和 agent 选择
+scripts/verify.sh <项目>      # 体检：引用块、副本完整性、各 agent 入口
+scripts/uninstall.sh <项目>   # 卸载：删副本和入口文件，保留 AGENTS.md 和项目专属笔记
+                              # （要连项目笔记一起删，加 --purge-project）
+```
 
 只装了 4 个 agent 也没关系：`verify` 只校验你装过的那些，不会拿没装的报错。换机器或挪了规则库，
 重跑一次 install 就会自动刷新路径。
@@ -132,12 +151,26 @@ vibe-rules/（你 clone 到的任意路径）
 ├── languages/             # 按技术栈
 │   ├── java.md  python.md  nodejs.md  vue.md  react.md
 ├── skills/                # 可复用工作流（你自己加的也放这）
-├── projects/              # 项目专属沉淀
+├── projects/              # 本机项目专属沉淀（new-project 在外链模式下用；默认不提交）
 │   └── <项目名>/          # 每个项目一个目录
 ├── inbox/                 # 还没归类的灵感/素材，定期 review 转正
-├── templates/AGENTS.md    # 新项目的 AGENTS.md 模板
+├── templates/             # AGENTS.md 模板 + 副本入口指南（ENTRY.md）+ 项目笔记模板（PROJECT-NOTES.md）
 ├── tests/                 # 端到端冒烟测试（smoke.sh + smoke.ps1）
-└── scripts/               # 安装/迁移/验证脚本（sh + ps1 双份）
+└── scripts/               # 安装/更新/验证/卸载/迁移脚本（sh + ps1 双份；agent 清单在 agents.conf）
+```
+
+install 之后，你的项目里会多出这些（默认副本模式）：
+
+```
+your-project/
+├── AGENTS.md              # 顶部注入 vibe-rules 引用块（相对路径），正文仍是你自己的项目约定
+├── CLAUDE.md / .cursorrules / .cursor/rules/...   # 按你装的编号生成的各 agent 入口
+└── .vibe-rules/           # 规则副本（整目录提交进仓库）
+    ├── installed          # 证据文件：模式、版本、装过哪些 agent（verify/update/uninstall 靠它）
+    ├── README.md          # 副本入口指南（先读哪个、优先级怎么排）
+    ├── global/ languages/ skills/   # 规则本体副本
+    ├── personal/          # 个人偏好与记忆（用了 --no-personal 就没有）
+    └── project/README.md  # 项目专属笔记：只在不存在时建档、永不覆盖，建议跟代码一起提交
 ```
 
 ## 日常怎么沉淀
@@ -149,8 +182,10 @@ vibe-rules/（你 clone 到的任意路径）
 | 跨项目通用的踩坑 | `personal/memory.md` | "Java 序列化要注意..." |
 | 个人开发偏好 | `personal/preferences.md` | "函数名用动词开头" |
 | 新项目或新发现的工作流 | `skills/` | "code-review 流程" |
-| 某个项目特有的坑 | `projects/<项目名>/` | "这个项目的缓存策略" |
+| 某个项目特有的坑 | 项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式） | "这个项目的缓存策略" |
 | 还没想好归哪 | `inbox/` | 稍后再整理 |
+
+> 注意：项目副本里的 `global/`、`languages/`、`skills/`、`personal/` 是规则库的**拷贝**，在项目里改不会同步回规则库。跨项目通用的沉淀请去规则库本体改，再 `update.sh` 刷副本；项目专属内容写在 `.vibe-rules/project/README.md`，它属于项目，不会被覆盖。
 
 ## 项目间迁移
 
@@ -185,6 +220,14 @@ pwsh C:\path\to\vibe-rules\scripts\migrate.ps1 旧项目slug 新项目slug
 pwsh C:\path\to\vibe-rules\scripts\verify.ps1 C:\path\to\project
 ```
 
+更新和卸载同理：
+
+```bash
+scripts/update.sh /path/to/project                 # 规则库 pull 之后刷新副本
+scripts/uninstall.sh /path/to/project              # 删副本 + 入口文件；保留 AGENTS.md 和项目笔记
+scripts/uninstall.sh /path/to/project --purge-project   # 连项目笔记一起删
+```
+
 ## 改了脚本先跑冒烟测试
 
 这个库的安装/卸载/迁移是端到端的，改脚本前先跑一遍：
@@ -200,8 +243,9 @@ pwsh tests\smoke.ps1
 ```
 
 它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
-空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径，bash 版目前 58 项断言（会随测试增长），
-PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
+空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
+引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
+`--purge-project` 删项目笔记。bash 版目前 85 项断言（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
 
 CI（`.github/workflows/smoke.yml`）会跑三档：
 
@@ -229,7 +273,7 @@ CI（`.github/workflows/smoke.yml`）会跑三档：
 
 - **踩坑立刻记**：`global/anti-patterns.md` 追加一条
 - **看到好东西**：扔 `inbox/`，定期 review 转正
-- **项目特殊约定**：写到 `projects/<项目名>/`
+- **项目特殊约定**：写到项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式）
 - **改了就 commit**
 
 ---

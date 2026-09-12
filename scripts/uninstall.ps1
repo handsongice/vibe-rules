@@ -1,15 +1,17 @@
 # uninstall.ps1 —— 从项目中移除 vibe-rules 入口文件（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\uninstall.ps1 [项目路径]
+#   pwsh scripts\uninstall.ps1 [项目路径] [-PurgeProject]
 #
+#   -PurgeProject   连同 .vibe-rules\project\ 项目专属笔记一起删除
 #   -Help           显示本帮助
 #
-# 会删除 vibe-rules 建的入口文件、.vibe-rules、AGENTS.md 顶部的引用块；
-# 保留 AGENTS.md 正文和项目原有的真实文件。
+# 会删除 vibe-rules 建的入口文件、证据文件、规则副本、AGENTS.md 顶部的引用块；
+# 默认保留 AGENTS.md 正文、项目原有真实文件、.vibe-rules\project\ 项目笔记。
 
 param(
     [Parameter(Position=0)][string]$ProjectRoot = ".",
+    [switch]$PurgeProject,
     [switch]$Help
 )
 
@@ -116,10 +118,42 @@ if (Test-Path "AGENTS.md") {
 }
 
 # ---------- 证据文件 ----------
-if (Test-Path ".vibe-rules") {
-    Remove-Item ".vibe-rules" -Force
-    Write-Host "  ✅ 删除 .vibe-rules"
+$evidence = ""
+if (Test-Path ".vibe-rules\installed") { $evidence = ".vibe-rules\installed" }
+elseif ((Test-Path ".vibe-rules") -and -not (Test-Path ".vibe-rules" -PathType Container)) { $evidence = ".vibe-rules" }
+if ($evidence) {
+    Remove-Item $evidence -Force
+    Write-Host "  ✅ 删除 $evidence（证据文件）"
     $script:removed++
+}
+
+# ---------- 规则副本（保留 project\ 项目笔记） ----------
+if (Test-Path ".vibe-rules" -PathType Container) {
+    foreach ($sub in @("global", "languages", "skills", "personal", "project")) {
+        $subPath = ".vibe-rules\$sub"
+        if (-not (Test-Path $subPath)) { continue }
+        if ($sub -eq "project" -and -not $PurgeProject) {
+            Write-Host "  ℹ️  保留 .vibe-rules\project\（项目专属笔记；要删加 -PurgeProject）"
+            continue
+        }
+        Remove-Item $subPath -Recurse -Force
+        Write-Host "  ✅ 删除 .vibe-rules\$sub\"
+        $script:removed++
+    }
+    foreach ($f in @("README.md", "LICENSE", ".gitignore", "VERSION", "AGENTS.md", "installed")) {
+        $fp = ".vibe-rules\$f"
+        if (Test-Path $fp) {
+            Remove-Item $fp -Force
+            Write-Host "  ✅ 删除 .vibe-rules\$f"
+            $script:removed++
+        }
+    }
+    if (-not (Get-ChildItem ".vibe-rules" -Force | Select-Object -First 1)) {
+        Remove-Item ".vibe-rules" -Force -ErrorAction SilentlyContinue
+        Write-Host "  ✅ 删除空目录: .vibe-rules"
+    } else {
+        Write-Host "  ℹ️  .vibe-rules\ 仍留有内容（项目笔记），未整个删除"
+    }
 }
 
 # ---------- 清理空目录 ----------
@@ -144,3 +178,8 @@ if ((Test-Path ".github") -and -not (Get-ChildItem ".github" -Force | Select-Obj
 Write-Host ""
 Write-Host "🎉 完成。删除 $script:removed 个文件，保留 $script:skipped 个真实文件。"
 Write-Host "   AGENTS.md 正文保留不动。"
+if ($PurgeProject) {
+    Write-Host "   .vibe-rules\project\ 项目笔记已按 -PurgeProject 一起删除。"
+} else {
+    Write-Host "   .vibe-rules\project\ 项目笔记保留；确认不要了再跑 -PurgeProject。"
+}

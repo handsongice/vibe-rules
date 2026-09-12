@@ -36,48 +36,108 @@ bad()  { FAIL=$((FAIL+1)); echo "  ❌ $1"; }
 warn() { echo "  ⚠️  $1"; }
 
 # ---------- 1. 证据文件 ----------
-if [ ! -f ".vibe-rules" ]; then
-  echo "  ❌ 未接入：缺少 .vibe-rules 证据文件"
+EVIDENCE=""
+if [ -f ".vibe-rules/installed" ]; then
+  EVIDENCE=".vibe-rules/installed"
+elif [ -f ".vibe-rules" ] && [ ! -d ".vibe-rules" ]; then
+  EVIDENCE=".vibe-rules"
+fi
+if [ -z "$EVIDENCE" ]; then
+  echo "  ❌ 未接入：缺少 .vibe-rules/installed 证据文件"
   echo ""
   echo "🔧 修复："
   echo "   $VIBE_HOME/scripts/install.sh $PROJECT_ROOT"
   exit 1
 fi
-ok ".vibe-rules 证据文件存在"
+ok "证据文件存在：$EVIDENCE"
 
-RULES_HOME="$(sed -n 's/^rules_home=//p' .vibe-rules | head -n 1)"
-INSTALLED="$(sed -n 's/^agents=//p' .vibe-rules | head -n 1 | tr ',' ' ')"
+MODE="$(sed -n 's/^mode=//p' "$EVIDENCE" | head -n 1)"
+RULES_HOME="$(sed -n 's/^rules_home=//p' "$EVIDENCE" | head -n 1)"
+RULES_VERSION="$(sed -n 's/^rules_version=//p' "$EVIDENCE" | head -n 1)"
+INSTALLED="$(sed -n 's/^agents=//p' "$EVIDENCE" | head -n 1 | tr ',' ' ')"
 
-# ---------- 2. 规则库本体 ----------
-if [ -n "$RULES_HOME" ] && [ -d "$RULES_HOME" ]; then
-  ok "规则库路径有效：$RULES_HOME"
-else
-  bad "规则库路径失效：${RULES_HOME:-（空）}（被移动或删除？重跑 install.sh）"
+# 兼容旧版证据文件（没有 mode 字段）：一律按外链模式校验
+if [ -z "$MODE" ]; then
+  MODE="link"
 fi
 
-if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/README.md" ]; then
-  ok "规则库入口存在：README.md"
+if [ "$MODE" = "embedded" ] || [ "$MODE" = "link" ]; then
+  ok "模式：$MODE"
 else
-  bad "规则库入口缺失：${RULES_HOME:-?}/README.md"
+  bad "证据文件 mode 值无效：${MODE}（应为 embedded 或 link）"
 fi
 
-for extra in personal/preferences.md personal/memory.md global/anti-patterns.md; do
-  if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/$extra" ]; then
-    :
+# ---------- 2. 规则本体 ----------
+if [ "$MODE" = "embedded" ]; then
+  if [ -f "$PROJECT_ROOT/.vibe-rules/README.md" ]; then
+    ok "副本入口存在：.vibe-rules/README.md"
   else
-    warn "规则库中缺少 ${extra}（AGENTS.md 引用块会指向空路径）"
+    bad "副本入口缺失：.vibe-rules/README.md（重跑 install.sh 刷新副本）"
   fi
-done
+
+  for extra in global/iron-rules.md global/anti-patterns.md skills/README.md; do
+    if [ -f "$PROJECT_ROOT/.vibe-rules/$extra" ]; then
+      ok "副本含 $extra"
+    else
+      bad "副本缺少 $extra"
+    fi
+  done
+  if [ -d "$PROJECT_ROOT/.vibe-rules/languages" ]; then
+    ok "副本含 languages/（技术栈规范）"
+  else
+    bad "副本缺少 languages/"
+  fi
+
+  if [ -f "$PROJECT_ROOT/.vibe-rules/project/README.md" ]; then
+    ok "项目专属笔记存在：.vibe-rules/project/README.md"
+  else
+    warn "缺少 .vibe-rules/project/README.md（重跑 install.sh 会建档，且不会覆盖已有内容）"
+  fi
+
+  if [ -f "$PROJECT_ROOT/.vibe-rules/personal/preferences.md" ]; then
+    ok "副本含 personal/（个人偏好与记忆）"
+  else
+    warn "副本不含 personal/（安装时用了 --no-personal，属正常）"
+  fi
+else
+  if [ -n "$RULES_HOME" ] && [ -d "$RULES_HOME" ]; then
+    ok "规则库路径有效：$RULES_HOME"
+  else
+    bad "规则库路径失效：${RULES_HOME:-（空）}（被移动或删除？重跑 install.sh）"
+  fi
+
+  if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/README.md" ]; then
+    ok "规则库入口存在：README.md"
+  else
+    bad "规则库入口缺失：${RULES_HOME:-?}/README.md"
+  fi
+
+  for extra in personal/preferences.md personal/memory.md global/anti-patterns.md; do
+    if [ -n "$RULES_HOME" ] && [ -f "$RULES_HOME/$extra" ]; then
+      :
+    else
+      warn "规则库中缺少 ${extra}（AGENTS.md 引用块会指向空路径）"
+    fi
+  done
+fi
 
 # ---------- 3. AGENTS.md 引用块 ----------
 if [ -f "AGENTS.md" ]; then
   ok "项目根有 AGENTS.md"
   if grep -q '<!-- vibe-rules:begin' AGENTS.md 2>/dev/null; then
     ok "AGENTS.md 含 vibe-rules 引用块"
-    if [ -n "$RULES_HOME" ] && grep -qF "$RULES_HOME" AGENTS.md 2>/dev/null; then
-      ok "引用块指向当前规则库路径"
+    if [ "$MODE" = "embedded" ]; then
+      if grep -qF '.vibe-rules/README.md' AGENTS.md 2>/dev/null; then
+        ok "引用块指向项目内副本（.vibe-rules/）"
+      else
+        bad "引用块不是指向项目内副本（重跑 install.sh 刷新）"
+      fi
     else
-      bad "引用块里的规则库路径不是当前路径（重跑 install.sh 即可刷新）"
+      if [ -n "$RULES_HOME" ] && grep -qF "$RULES_HOME" AGENTS.md 2>/dev/null; then
+        ok "引用块指向当前规则库路径"
+      else
+        bad "引用块里的规则库路径不是当前路径（重跑 install.sh 即可刷新）"
+      fi
     fi
   else
     bad "AGENTS.md 缺少 vibe-rules 引用块（重跑 install.sh 注入）"

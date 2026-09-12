@@ -7,12 +7,20 @@
 # 选项：
 #   --all            安装所有 agent 入口（老用户批量接入用）
 #   --agents 1,3,5   只安装指定编号（逗号或空格分隔）
-#   --copy           用真实文件复制代替 symlink（云端 agent / 无 symlink 环境）
-#   --yes            非交互模式（配合 --all / --agents / --copy）
+#   --link           外链模式：项目里只放入口 + 引用块，规则本体留在本机规则库
+#                    （合规敏感、规则不便进仓库时用；默认是自包含副本模式）
+#   --no-personal    副本里不含 personal/（个人偏好与记忆不进项目仓库）
+#   --copy           入口用真实文件复制代替 symlink（云端 agent / 无 symlink 环境）
+#   --yes            非交互模式（配合 --all / --agents）
 #   -h, --help       显示帮助
 #
+# 默认行为（自包含副本模式）：把规则副本复制进项目的 .vibe-rules/，
+# AGENTS.md 引用块用相对路径指向副本。队友 clone、云端 agent、CI 都能直接读到，
+# 不依赖任何人的本机路径。项目专属笔记写在 .vibe-rules/project/README.md，
+# 只在不存在时建档，之后永不覆盖。
+#
 # 幂等：可重复执行。已有 AGENTS.md 不会被覆盖，只在顶部注入/刷新
-#       「vibe-rules 引用块」；规则库搬家后重跑即可自动更新路径。
+#       「vibe-rules 引用块」；重跑即刷新副本，也可用 scripts/update.sh。
 
 set -euo pipefail
 
@@ -20,7 +28,7 @@ VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 CONF_FILE="$VIBE_HOME/scripts/agents.conf"
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # ---------- 参数解析 ----------
@@ -28,6 +36,8 @@ PROJECT_ROOT=""
 ALL_MODE=false
 COPY_MODE=false
 ASSUME_YES=false
+LINK_MODE=false
+WITH_PERSONAL=true
 SELECTION_ARG=""
 
 while [ $# -gt 0 ]; do
@@ -42,6 +52,8 @@ while [ $# -gt 0 ]; do
       SELECTION_ARG="$1"
       ;;
     --agents=*) SELECTION_ARG="${1#--agents=}" ;;
+    --link) LINK_MODE=true ;;
+    --no-personal) WITH_PERSONAL=false ;;
     --copy) COPY_MODE=true ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
@@ -99,6 +111,9 @@ if [ "${#NUMS[@]}" -eq 0 ]; then
   exit 1
 fi
 
+VIBE_VERSION="$(git -C "$VIBE_HOME" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+INSTALLED_AT="$(date +%Y-%m-%d)"
+
 echo "📦 规则库：$VIBE_HOME"
 echo "🎯 项目：$PROJECT_ROOT"
 echo ""
@@ -155,6 +170,72 @@ if [ "$SELECTED" = " " ]; then
   exit 1
 fi
 
+# ---------- 模式与本体 ----------
+if [ "$LINK_MODE" = true ]; then
+  MODE="link"
+else
+  MODE="embedded"
+fi
+
+RULES_DIR="$PROJECT_ROOT/.vibe-rules"
+PERSONAL_NOTE="（有就读）"
+
+if [ "$MODE" = "embedded" ]; then
+  echo "📦 模式：自包含副本（规则复制进 ${RULES_DIR}，引用块用相对路径）"
+else
+  echo "📦 模式：外链（规则留在本机，引用块指向 ${VIBE_HOME}）"
+fi
+
+if [ "$MODE" = "embedded" ]; then
+  if [ "$VIBE_HOME" = "$PROJECT_ROOT" ]; then
+    echo "❌ 项目路径不能是规则库本身（会把副本复制进自己）"
+    exit 1
+  fi
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "❌ 自包含副本模式需要 rsync（macOS/Linux 自带；Windows 请用 install.ps1，或加 --link）"
+    exit 1
+  fi
+
+  echo "📄 复制规则副本 → $RULES_DIR"
+  mkdir -p "$RULES_DIR"
+  # project/ 是项目专属笔记，必须排除在 --delete 之外（否则更新会把笔记删掉）
+  RSYNC_ARGS=(-a --delete --exclude=.git --exclude=.github --exclude=.gitignore
+              --exclude=scripts --exclude=tests --exclude=templates
+              --exclude=projects --exclude=project --exclude=inbox)
+  if [ "$WITH_PERSONAL" = true ]; then
+    rsync "${RSYNC_ARGS[@]}" "$VIBE_HOME/" "$RULES_DIR/"
+  else
+    # --delete-excluded：上一次安装带进去的 personal/ 也要一并清掉
+    rsync "${RSYNC_ARGS[@]}" --exclude=personal --delete-excluded "$VIBE_HOME/" "$RULES_DIR/"
+    PERSONAL_NOTE="（副本里未包含，跳过）"
+  fi
+  echo "   ✅ 规则本体（global / languages / skills）"
+
+  # 入口指南：覆盖上游 README，写清副本内的阅读顺序和维护方式
+  sed -e "s|@VIBE_VERSION@|${VIBE_VERSION}|g" -e "s|@INSTALLED_AT@|${INSTALLED_AT}|g" \
+      "$VIBE_HOME/templates/ENTRY.md" > "$RULES_DIR/README.md"
+  echo "   ✅ README.md（副本入口指南）"
+
+  # 项目专属笔记：只在不存在时建档，之后永不覆盖
+  if [ ! -f "$RULES_DIR/project/README.md" ]; then
+    mkdir -p "$RULES_DIR/project"
+    sed -e "s|@SLUG@|${SLUG}|g" "$VIBE_HOME/templates/PROJECT-NOTES.md" \
+        > "$RULES_DIR/project/README.md"
+    echo "   ✅ project/README.md（项目专属笔记，之后不会被覆盖）"
+  else
+    echo "   ℹ️  project/README.md 已存在，保留不动"
+  fi
+else
+  # 外链模式：项目笔记留在规则库 projects/<slug>/（多项目互不覆盖）
+  LINK_NOTES_DIR="$VIBE_HOME/projects/$SLUG"
+  if [ ! -f "$LINK_NOTES_DIR/README.md" ]; then
+    mkdir -p "$LINK_NOTES_DIR"
+    sed -e "s|@SLUG@|${SLUG}|g" "$VIBE_HOME/templates/PROJECT-NOTES.md" \
+        > "$LINK_NOTES_DIR/README.md"
+    echo "📝 规则库里建了项目专属笔记：$LINK_NOTES_DIR/README.md"
+  fi
+fi
+
 # ---------- 生成引用块 ----------
 TMP_BLOCK="$(mktemp "${TMPDIR:-/tmp}/vibe-block.XXXXXX")"
 TMP_WORK="$(mktemp "${TMPDIR:-/tmp}/vibe-work.XXXXXX")"
@@ -163,20 +244,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# embedded 模式用相对路径（换机器/换目录都有效）；link 模式只能绝对路径
+if [ "$MODE" = "embedded" ]; then
+  RULES_REF=".vibe-rules"
+  NOTES_REF="$RULES_REF/project/README.md"
+else
+  RULES_REF="$VIBE_HOME"
+  NOTES_REF="$VIBE_HOME/projects/$SLUG/README.md"
+fi
+
+if [ "$MODE" = "embedded" ]; then
+  BLOCK_INTRO="开始任何工作前，按下面的顺序读（**自包含副本**，路径相对项目根，不需要访问项目外的任何文件）："
+else
+  BLOCK_INTRO="开始任何工作前，按下面的顺序读（**外链模式**，路径是本机规则库的绝对路径，不存在就跳过）："
+fi
+
 cat > "$TMP_BLOCK" <<EOF
-<!-- vibe-rules:begin（本块由 vibe-rules 自动维护，勿手改；重跑 install.sh 即可刷新） -->
+<!-- vibe-rules:begin（本块由 vibe-rules 自动维护，勿手改；重跑 install.sh / update.sh 即可刷新） -->
 ## 全局规则库（vibe-rules）
 
-开始任何工作前，按下面的顺序读（路径是本机路径，不存在就跳过）：
+$BLOCK_INTRO
 
-1. **全局规则库入口**：\`$VIBE_HOME/README.md\` —— 六条铁律 + 索引
-2. **个人偏好层**：\`$VIBE_HOME/personal/preferences.md\`
-3. **个人记忆（最新 10 条）**：\`$VIBE_HOME/personal/memory.md\`
-4. **全局踩坑库（最新 10 条）**：\`$VIBE_HOME/global/anti-patterns.md\`
-5. **本项目专属沉淀**：\`$VIBE_HOME/projects/$SLUG/README.md\`（存在就读；没有可跑 new-project.sh 建档）
-6. **技术栈规范**：\`$VIBE_HOME/languages/<tech>.md\`（按本项目实际栈读，不要全读）
+1. **规则库入口**：\`$RULES_REF/README.md\` —— 六条铁律 + 索引
+2. **全局踩坑库（最新 10 条）**：\`$RULES_REF/global/anti-patterns.md\`
+3. **个人偏好与记忆**：\`$RULES_REF/personal/preferences.md\`、\`$RULES_REF/personal/memory.md\`$PERSONAL_NOTE
+4. **本项目专属沉淀**：\`$NOTES_REF\` —— 最具体，冲突时优先
+5. **技术栈规范**：\`$RULES_REF/languages/<tech>.md\`（按本项目实际栈读，不要全读）
+6. **可复用工作流**：\`$RULES_REF/skills/README.md\`，再按当前任务挑一个 \`$RULES_REF/skills/<name>/SKILL.md\`
 
-> 规则优先级：项目内约定 > 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
+> 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
 EOF
 
@@ -191,7 +287,11 @@ fi
 
 # 兼容旧版模板：把残留的 ~/.vibe 硬编码换成当前实际路径
 if grep -q '~/\.vibe' "$AGENTS_FILE" 2>/dev/null; then
-  sed -i.bak "s|~/\.vibe|$VIBE_HOME|g" "$AGENTS_FILE"
+  if [ "$MODE" = "embedded" ]; then
+    sed -i.bak "s|~/\.vibe|.vibe-rules/|g" "$AGENTS_FILE"
+  else
+    sed -i.bak "s|~/\.vibe|$VIBE_HOME|g" "$AGENTS_FILE"
+  fi
   rm -f "$AGENTS_FILE.bak"
   echo "🧹 已刷新 AGENTS.md 里的旧版规则库路径"
 fi
@@ -342,22 +442,38 @@ while [ $i -lt "${#NUMS[@]}" ]; do
 done
 
 # ---------- 证据文件 ----------
-VIBE_VERSION="$(git -C "$VIBE_HOME" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 AGENTS_LIST="$(echo $SELECTED | tr ' ' ',')"
-cat > "$PROJECT_ROOT/.vibe-rules" <<EOF
+if [ "$MODE" = "embedded" ]; then
+  EVIDENCE_FILE="$RULES_DIR/installed"
+  EVIDENCE_LABEL=".vibe-rules/installed"
+else
+  EVIDENCE_FILE="$PROJECT_ROOT/.vibe-rules"
+  EVIDENCE_LABEL=".vibe-rules"
+fi
+cat > "$EVIDENCE_FILE" <<EOF
+mode=$MODE
 rules_home=$VIBE_HOME
 rules_version=$VIBE_VERSION
-installed_at=$(date +%Y-%m-%d)
+installed_at=$INSTALLED_AT
 project=$PROJECT_ROOT
 agents=$AGENTS_LIST
 EOF
-echo "  ✅ .vibe-rules（证据文件，agents=${AGENTS_LIST}）"
+echo "  ✅ ${EVIDENCE_LABEL}（mode=${MODE}，agents=${AGENTS_LIST}）"
 
 echo ""
 echo "🎉 完成。"
 echo "   验证：$VIBE_HOME/scripts/verify.sh $PROJECT_ROOT"
 echo ""
-echo "   提示："
-echo "   - .vibe-rules 记录的是本机绝对路径，建议加入项目 .gitignore（不要提交）"
-echo "   - AGENTS.md 里的引用块是自动生成的；团队/云端环境每人跑一次 install 即可"
-echo "   - 规则库搬家后，重跑本脚本会自动刷新路径"
+if [ "$MODE" = "embedded" ]; then
+  echo "   提示："
+  echo "   - 规则副本已进项目：.vibe-rules/（整目录提交进仓库，团队/云端/CI 都能直接读到，不依赖任何人的本机路径）"
+  echo "   - 项目专属笔记在 .vibe-rules/project/README.md，也建议提交；重装/更新都不会覆盖它"
+  if [ "$WITH_PERSONAL" = true ]; then
+    echo "   - 副本里含 personal/（个人偏好与记忆）。不想带进仓库：用 --no-personal 装，或把 .vibe-rules/personal/ 加进 .gitignore"
+  fi
+  echo "   - 规则库以后改了：$VIBE_HOME/scripts/update.sh $PROJECT_ROOT"
+else
+  echo "   提示："
+  echo "   - 外链模式：规则本体留在本机，${VIBE_HOME} 搬家后重跑 install/update 即可刷新"
+  echo "   - .vibe-rules 里记录的是本机路径，建议加进项目 .gitignore（不要提交）"
+fi

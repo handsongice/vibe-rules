@@ -2,24 +2,34 @@
 # uninstall.sh —— 从项目中移除 vibe-rules 的所有入口文件
 #
 # 用法：
-#   /path/to/vibe-rules/scripts/uninstall.sh [项目路径]
+#   /path/to/vibe-rules/scripts/uninstall.sh [项目路径] [--purge-project]
 #
 # 会删除：
 #   - 所有 agent 入口 symlink / wrapper / 复制文件（只删 vibe-rules 建的）
 #   - .vibe-rules 证据文件
+#   - 自包含副本 .vibe-rules/ 的规则部分（global / languages / skills / personal / README.md）
 #   - AGENTS.md 顶部的 vibe-rules 引用块（正文保留）
-# 不会删除：
+# 不会删除（默认）：
 #   - AGENTS.md 正文
 #   - 项目里原有的真实文件
+#   - .vibe-rules/project/（你的项目专属笔记；要一起删加 --purge-project）
 
 set -euo pipefail
 
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 CONF_FILE="$VIBE_HOME/scripts/agents.conf"
 PROJECT_ROOT="${1:-$(pwd)}"
+PURGE_PROJECT=false
+
+if [ "$PROJECT_ROOT" = "--purge-project" ]; then
+  PROJECT_ROOT="$(pwd)"
+  PURGE_PROJECT=true
+elif [ "${2:-}" = "--purge-project" ]; then
+  PURGE_PROJECT=true
+fi
 
 if [ "$PROJECT_ROOT" = "-h" ] || [ "$PROJECT_ROOT" = "--help" ]; then
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 
@@ -113,11 +123,46 @@ if [ -f "AGENTS.md" ] && grep -q '<!-- vibe-rules:begin' AGENTS.md 2>/dev/null; 
   removed=$((removed+1))
 fi
 
-# ---------- 证据文件 ----------
+# ---------- 证据文件 + 规则副本 ----------
+MODE=""
+EVIDENCE=""
 if [ -f ".vibe-rules" ]; then
-  rm ".vibe-rules"
-  echo "  ✅ 删除 .vibe-rules"
+  EVIDENCE=".vibe-rules"
+elif [ -f ".vibe-rules/installed" ]; then
+  EVIDENCE=".vibe-rules/installed"
+fi
+if [ -n "$EVIDENCE" ]; then
+  MODE="$(sed -n 's/^mode=//p' "$EVIDENCE" | head -n 1)"
+  rm "$EVIDENCE"
+  echo "  ✅ 删除 ${EVIDENCE}（证据文件）"
   removed=$((removed+1))
+fi
+
+# 删掉副本里的规则部分，保留 project/ 项目笔记
+if [ -d ".vibe-rules" ]; then
+  for sub in global languages skills personal project; do
+    if [ -d ".vibe-rules/$sub" ]; then
+      if [ "$sub" = "project" ] && [ "$PURGE_PROJECT" != true ]; then
+        echo "  ℹ️  保留 .vibe-rules/project/（项目专属笔记；要删加 --purge-project）"
+        continue
+      fi
+      rm -r ".vibe-rules/$sub"
+      echo "  ✅ 删除 .vibe-rules/$sub/"
+      removed=$((removed+1))
+    fi
+  done
+  for f in README.md LICENSE .gitignore VERSION AGENTS.md installed; do
+    if [ -f ".vibe-rules/$f" ]; then
+      rm -f ".vibe-rules/$f"
+      echo "  ✅ 删除 .vibe-rules/$f"
+      removed=$((removed+1))
+    fi
+  done
+  if [ -z "$(ls -A ".vibe-rules" 2>/dev/null)" ]; then
+    rmdir ".vibe-rules" 2>/dev/null && echo "  ✅ 删除空目录: .vibe-rules"
+  else
+    echo "  ℹ️  .vibe-rules/ 仍留有内容（项目笔记），未整个删除"
+  fi
 fi
 
 # ---------- 清理空目录 ----------
@@ -141,4 +186,8 @@ fi
 echo ""
 echo "🎉 完成。删除 $removed 个文件，保留 $skipped 个真实文件。"
 echo "   AGENTS.md 正文保留不动。"
-echo "   规则库 projects/ 下的注册记录保留，想删手动去 $VIBE_HOME/projects/ 下删。"
+if [ "$PURGE_PROJECT" = true ]; then
+  echo "   .vibe-rules/project/ 项目笔记已按 --purge-project 一起删除。"
+else
+  echo "   .vibe-rules/project/ 项目笔记保留；确认不要了再跑 --purge-project。"
+fi

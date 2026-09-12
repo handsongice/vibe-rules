@@ -1,8 +1,9 @@
 # 项目级 AGENTS.md
 
 > 本文件是当前项目的开发约定，**优先级高于全局规范库**。
-> 顶部的「全局规则库（vibe-rules）」引用块由 `install.sh` 自动注入和维护，不要手改；
-> 规则库搬家或换机器后，重跑一次 install 即可刷新。
+> 顶部的「全局规则库（vibe-rules）」引用块由 install / update 脚本自动注入和维护，不要手改。
+> 默认模式下规则副本就在本项目 `.vibe-rules/` 里、跟着仓库走：队友 clone、云端 agent、CI 都能直接读到。
+> 规则库更新后（先在规则库 `git pull`）重跑一次 `scripts/update.sh <本项目>` 即可刷新副本和引用块。
 
 ---
 

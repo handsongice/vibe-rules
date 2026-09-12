@@ -1,14 +1,20 @@
 # install.ps1 —— 在你的开发项目里接入 vibe-rules（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Copy] [-Yes]
+#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Copy] [-Yes]
 #
 # 选项：
 #   -All            安装所有 agent 入口
 #   -AgentNums 1,3  只安装指定编号（逗号或空格分隔）
-#   -Copy           用真实文件复制代替 symlink（无 symlink 权限时的默认降级也一样）
+#   -Link           外链模式：规则本体留在本机规则库，引用块用绝对路径（默认是自包含副本模式）
+#   -NoPersonal     副本里不含 personal\（个人偏好与记忆不进项目仓库）
+#   -Copy           入口用真实文件复制代替 symlink（无 symlink 权限时的默认降级也一样）
 #   -Yes            非交互模式（配合 -All / -AgentNums）
 #   -Help           显示本帮助
+#
+# 默认行为（自包含副本模式）：规则复制进项目 .vibe-rules\，AGENTS.md 引用块用相对路径。
+# 队友 clone、云端 agent、CI 都能直接读到，不依赖任何人的本机路径。
+# 项目专属笔记在 .vibe-rules\project\README.md，只在不存在时建档，之后永不覆盖。
 #
 # 幂等：可重复执行。已有 AGENTS.md 不会被覆盖，只在顶部注入/刷新引用块。
 
@@ -17,6 +23,8 @@ param(
     [switch]$Help,
     [switch]$All,
     [string]$AgentNums = "",
+    [switch]$Link,
+    [switch]$NoPersonal,
     [switch]$Copy,
     [switch]$Yes
 )
@@ -115,26 +123,119 @@ if ($SelectedNums.Count -eq 0) {
     exit 1
 }
 
+# ---------- 模式与规则本体 ----------
+if ($Link) { $Mode = "link" } else { $Mode = "embedded" }
+$RulesDir = Join-Path $ProjectRoot ".vibe-rules"
+$PersonalNote = "（有就读）"
+
+if ($Mode -eq "embedded") {
+    Write-Host "📦 模式：自包含副本（规则复制进 $RulesDir，引用块用相对路径）"
+} else {
+    Write-Host "📦 模式：外链（规则留在本机，引用块指向 $VibeHome）"
+}
+
+if ($Mode -eq "embedded") {
+    if ($VibeHome -eq $ProjectRoot) {
+        Write-Host "❌ 项目路径不能是规则库本身（会把副本复制进自己）"
+        exit 1
+    }
+
+    Write-Host "📄 复制规则副本 → $RulesDir"
+    New-Item -ItemType Directory -Path $RulesDir -Force | Out-Null
+
+    # 排除清单：工具本身和项目专属笔记不进副本
+    $exclude = @(".git", ".github", ".gitignore", "scripts", "tests", "templates", "projects", "project", "inbox")
+    $rootLen = $VibeHome.Length + 1
+    Get-ChildItem -Path $VibeHome -Recurse -Force | ForEach-Object {
+        $rel = $_.FullName.Substring($rootLen)
+        $top = ($rel -split '[\\/]')[0]
+        if ($exclude -contains $top) { return }
+        if ($_.Name -like "StartupProfileData*") { return }
+        if ($NoPersonal -and $top -eq "personal") { return }
+        $dest = Join-Path $RulesDir $rel
+        if ($_.PSIsContainer) {
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        } else {
+            $destDir = Split-Path -Parent $dest
+            if ($destDir -and -not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+        }
+    }
+
+    # -NoPersonal 时清掉上一轮遗留的 personal\（保持幂等）
+    if ($NoPersonal) {
+        $stalePersonal = Join-Path $RulesDir "personal"
+        if (Test-Path $stalePersonal) {
+            Remove-Item $stalePersonal -Recurse -Force
+        }
+    }
+
+    $InstalledAt = (Get-Date -Format "yyyy-MM-dd")
+    $vibeVersionForEntry = "unknown"
+    if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $VibeHome ".git"))) {
+        try {
+            $v = & git -C $VibeHome rev-parse --short HEAD 2>$null
+            if ($v) { $vibeVersionForEntry = $v.Trim() }
+        } catch { }
+    }
+    $entry = Get-Content (Join-Path $VibeHome "templates\ENTRY.md") -Raw
+    $entry = $entry.Replace("@VIBE_VERSION@", $vibeVersionForEntry).Replace("@INSTALLED_AT@", $InstalledAt)
+    [System.IO.File]::WriteAllText((Join-Path $RulesDir "README.md"), $entry, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "   ✅ README.md（副本入口指南）"
+
+    $notesFile = Join-Path $RulesDir "project\README.md"
+    if (-not (Test-Path $notesFile)) {
+        New-Item -ItemType Directory -Path (Join-Path $RulesDir "project") -Force | Out-Null
+        $notes = Get-Content (Join-Path $VibeHome "templates\PROJECT-NOTES.md") -Raw
+        $notes = $notes.Replace("@SLUG@", $Slug)
+        [System.IO.File]::WriteAllText($notesFile, $notes, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "   ✅ project\README.md（项目专属笔记，之后不会被覆盖）"
+    } else {
+        Write-Host "   ℹ️  project\README.md 已存在，保留不动"
+    }
+} else {
+    $linkNotes = Join-Path $VibeHome "projects\$Slug"
+    if (-not (Test-Path (Join-Path $linkNotes "README.md"))) {
+        New-Item -ItemType Directory -Path $linkNotes -Force | Out-Null
+        $notes = Get-Content (Join-Path $VibeHome "templates\PROJECT-NOTES.md") -Raw
+        $notes = $notes.Replace("@SLUG@", $Slug)
+        [System.IO.File]::WriteAllText((Join-Path $linkNotes "README.md"), $notes, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "📝 规则库里建了项目专属笔记：$linkNotes\README.md"
+    }
+}
+
 # ---------- 引用块 ----------
 $BeginMarker = "<!-- vibe-rules:begin"
 $EndMarker = "<!-- vibe-rules:end -->"
+if ($Mode -eq "embedded") {
+    $rulesRef = ".vibe-rules"
+    $notesRef = ".vibe-rules/project/README.md"
+    $blockIntro = "开始任何工作前，按下面的顺序读（**自包含副本**，路径相对项目根，不需要访问项目外的任何文件）："
+} else {
+    $rulesRef = $VibeHome -replace '\\', '/'
+    $notesRef = "$rulesRef/projects/$Slug/README.md"
+    $blockIntro = "开始任何工作前，按下面的顺序读（**外链模式**，路径是本机规则库的绝对路径，不存在就跳过）："
+}
+if ($NoPersonal) { $PersonalNote = "（副本里未包含，跳过）" }
 $BlockTemplate = @'
-<!-- vibe-rules:begin（本块由 vibe-rules 自动维护，勿手改；重跑 install.ps1 即可刷新） -->
+<!-- vibe-rules:begin（本块由 vibe-rules 自动维护，勿手改；重跑 install.ps1 / update.ps1 即可刷新） -->
 ## 全局规则库（vibe-rules）
 
-开始任何工作前，按下面的顺序读（路径是本机路径，不存在就跳过）：
+@INTRO@
 
-1. **全局规则库入口**：`@VIBE_HOME@\README.md` —— 六条铁律 + 索引
-2. **个人偏好层**：`@VIBE_HOME@\personal\preferences.md`
-3. **个人记忆（最新 10 条）**：`@VIBE_HOME@\personal\memory.md`
-4. **全局踩坑库（最新 10 条）**：`@VIBE_HOME@\global\anti-patterns.md`
-5. **本项目专属沉淀**：`@VIBE_HOME@\projects\@SLUG@\README.md`（存在就读；没有可跑 new-project.ps1 建档）
-6. **技术栈规范**：`@VIBE_HOME@\languages\<tech>.md`（按本项目实际栈读，不要全读）
+1. **规则库入口**：`@RULES_REF@/README.md` —— 六条铁律 + 索引
+2. **全局踩坑库（最新 10 条）**：`@RULES_REF@/global/anti-patterns.md`
+3. **个人偏好与记忆**：`@RULES_REF@/personal/preferences.md`、`@RULES_REF@/personal/memory.md`@PERSONAL_NOTE@
+4. **本项目专属沉淀**：`@NOTES_REF@` —— 最具体，冲突时优先
+5. **技术栈规范**：`@RULES_REF@/languages/<tech>.md`（按本项目实际栈读，不要全读）
+6. **可复用工作流**：`@RULES_REF@/skills/README.md`，再按当前任务挑一个 `@RULES_REF@/skills/<name>/SKILL.md`
 
-> 规则优先级：项目内约定 > 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
+> 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
 '@
-$Block = $BlockTemplate.Replace('@VIBE_HOME@', $VibeHome).Replace('@SLUG@', $Slug)
+$Block = $BlockTemplate.Replace('@INTRO@', $blockIntro).Replace('@RULES_REF@', $rulesRef).Replace('@NOTES_REF@', $notesRef).Replace('@PERSONAL_NOTE@', $PersonalNote)
 
 function Repair-LegacyTemplate {
     param([string]$File)
@@ -142,7 +243,11 @@ function Repair-LegacyTemplate {
     $content = [System.IO.File]::ReadAllText($path)
     $changed = $false
     if ($content.Contains('~/.vibe')) {
-        $content = $content.Replace('~/.vibe', $VibeHome)
+        if ($Mode -eq "embedded") {
+            $content = $content.Replace('~/.vibe', '.vibe-rules/')
+        } else {
+            $content = $content.Replace('~/.vibe', $VibeHome)
+        }
         $changed = $true
     }
     if ($content -match '(?m)^## 0\. 必须先读') {
@@ -305,19 +410,40 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $
 }
 $agentsList = ($SelectedNums -join ",")
 $evidence = @"
+mode=$Mode
 rules_home=$VibeHome
 rules_version=$vibeVersion
 installed_at=$(Get-Date -Format "yyyy-MM-dd")
 project=$ProjectRoot
 agents=$agentsList
 "@
-[System.IO.File]::WriteAllText((Join-Path $ProjectRoot ".vibe-rules"), $evidence, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "  ✅ .vibe-rules（证据文件，agents=$agentsList）"
+if ($Mode -eq "embedded") {
+    $evidencePath = Join-Path $RulesDir "installed"
+    $evidenceLabel = ".vibe-rules\installed"
+} else {
+    $evidencePath = Join-Path $ProjectRoot ".vibe-rules"
+    $evidenceLabel = ".vibe-rules"
+}
+[System.IO.File]::WriteAllText($evidencePath, $evidence, (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "  ✅ $evidenceLabel（mode=$Mode，agents=$agentsList）"
+
+# 清掉 pwsh 在某些环境下往工作目录写的运行时垃圾文件
+Get-ChildItem -Path $ProjectRoot -Filter "StartupProfileData*" -Force -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "🎉 完成。"
 Write-Host "   验证：pwsh $VibeHome\scripts\verify.ps1 $ProjectRoot"
 Write-Host ""
 Write-Host "   提示："
-Write-Host "   - .vibe-rules 记录的是本机绝对路径，建议加入项目 .gitignore（不要提交）"
-Write-Host "   - 规则库搬家后，重跑本脚本会自动刷新路径"
+if ($Mode -eq "embedded") {
+    Write-Host "   - 规则副本已进项目：.vibe-rules\（整目录提交进仓库，团队/云端/CI 都能直接读到，不依赖任何人的本机路径）"
+    Write-Host "   - 项目专属笔记在 .vibe-rules\project\README.md，也建议提交；重装/更新都不会覆盖它"
+    if (-not $NoPersonal) {
+        Write-Host "   - 副本里含 personal\（个人偏好与记忆）。不想带进仓库：用 -NoPersonal 装，或把 .vibe-rules\personal\ 加进 .gitignore"
+    }
+    Write-Host "   - 规则库以后改了：pwsh $VibeHome\scripts\update.ps1 $ProjectRoot"
+} else {
+    Write-Host "   - 外链模式：规则本体留在本机，$VibeHome 搬家后重跑 install/update 即可刷新"
+    Write-Host "   - .vibe-rules 里记录的是本机路径，建议加进项目 .gitignore（不要提交）"
+}

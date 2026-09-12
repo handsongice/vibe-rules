@@ -6,3 +6,7 @@
 
 # 项目专属沉淀由 new-project 在本机生成，默认不提交（确实要提交用 git add -f）
 projects/
+
+# PowerShell 在只读 HOME 环境会把这两种缓存落到当前目录，属运行时垃圾
+ModuleAnalysisCache*
+StartupProfileData*
