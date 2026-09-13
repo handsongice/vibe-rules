@@ -6,6 +6,8 @@
 # 选项：
 #   -All            安装所有 agent 入口
 #   -AgentNums 1,3  只安装指定编号（逗号或空格分隔）
+#   -AgentNums 0    通用项：只留根目录 AGENTS.md，不建任何额外入口文件
+#                   （Android Studio 等原生读 AGENTS.md 的工具用这个）
 #   -Link           外链模式：规则本体留在本机规则库，引用块用绝对路径（默认是自包含副本模式）
 #   -NoPersonal     副本里不含 personal\（个人偏好与记忆不进项目仓库）
 #   -Profile team      团队档：强制自包含副本 + 不含 personal\，并要求副本真的能进仓库

@@ -68,8 +68,10 @@ agent 选择，不用重新选。Windows 侧是 PowerShell 参数写法，两边
 ```bash
 scripts/install.sh <项目路径> [选项]
 
-  --all            给 12 个 agent 全部建入口
+  --all            给全部 agent 建入口（0 号通用项不产生文件）
   --agents 1,4,7   只装指定编号的 agent（编号见“支持的 agent”一节，装完记在项目 .vibe-rules 里）
+  --agents 0       通用项：只留根目录 AGENTS.md，不建任何额外入口文件
+                   （Android Studio 等原生读 AGENTS.md 的工具用这个）
   --link           外链模式：规则本体留在本机规则库，项目里只放入口 + 绝对路径引用
                    （默认是自包含副本模式；规则不便进仓库时用）
   --no-personal    副本里不含 personal/（个人偏好与记忆不跟着项目仓库走）
@@ -82,14 +84,15 @@ scripts/install.sh <项目路径> [选项]
   --help           查看全部参数
 ```
 
-不带任何选项时是交互式的：列出 12 个 agent，你输入编号或 `all`。
+不带任何选项时是交互式的：列出 13 个条目（`0` 通用项 + 12 个 agent），你输入编号或 `all`。
 
 **sh ↔ PowerShell 参数对照**（同一个意思，两边写法不同）：
 
 | sh（macOS / Linux） | PowerShell（Windows） | 作用 |
 |---|---|---|
-| `--all` | `-All` | 给 12 个 agent 全部建入口 |
+| `--all` | `-All` | 给全部 agent 建入口（0 号通用项不产生文件） |
 | `--agents 1,4,7` | `-AgentNums 1,4,7` | 只装指定编号的 agent |
+| `--agents 0` | `-AgentNums 0` | 通用项：只留根目录 `AGENTS.md`，不建额外入口 |
 | `--link` | `-Link` | 外链模式：规则本体留本机，项目里只放入口 |
 | `--no-personal` | `-NoPersonal` | 副本里不含 `personal/` |
 | `--profile team` | `-Profile team` | 策略档位：`team` / `hybrid` / `personal` |
@@ -171,6 +174,17 @@ scripts/docs-status.sh <项目> --archive  # 把 done/abandoned 移进 archive/
 每个 agent 的入口文件都来自官方文档，不是猜的。
 
 编号就是 `--agents` 要填的数字（唯一数据源：`scripts/agents.conf`，所有脚本都读它，不需要改代码）。
+
+### 通用项（不建任何入口文件）
+
+| 编号 | 条目 | 说明 | 出处 |
+|---|---|---|---|
+| 0 | 通用（如 Android Studio） | 只用根目录 `AGENTS.md`，一个入口文件都不建 | https://agents.md |
+
+Android Studio 这类新版 IDE 的 AI 助手直接读项目根的 `AGENTS.md`，不需要额外规则文件；
+`--agents 0`（PowerShell：`-AgentNums 0`）就是给它们准备的——只写 `AGENTS.md` 引用块 + 规则副本，
+不产生 `CLAUDE.md` / `.cursorrules` / `.qoder/` 这些你用不上的文件。
+不确定用哪个工具、或者项目里同时有好几种工具但只想留一份 `AGENTS.md` 时，也可以用它。
 
 ### 原生读 AGENTS.md（无需额外文件）
 
@@ -408,11 +422,11 @@ pwsh tests\smoke.ps1
 ```
 
 它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
-空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
+空 AGENTS.md、旧版模板迁移、`--all`、`--agents 0`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
 `--purge-project` 删项目笔记、`scripts/lint.sh` 的六类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
 外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
-`uninstall` 只删自己生成的）。bash 版目前 283 项断言、PS 版 184 项——**这两个数字由冒烟测试自己核对 README**，
+`uninstall` 只删自己生成的）。bash 版目前 294 项断言、PS 版 195 项——**这两个数字由冒烟测试自己核对 README**，
 改断言数量忘了同步 README 会直接红。PS 版覆盖 Windows 侧同类关键路径，改完 PR 前必须全绿。
 
 另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦六类"已经真出过事"的问题：

@@ -194,11 +194,26 @@ echo "== 6. --all / 无效编号 / --help =="
 P3="$TMP_ROOT/proj-all"
 "$R2/scripts/install.sh" "$P3" --all --yes >/dev/null 2>&1
 AGENT_COUNT="$(sed -n 's/^agents=//p' "$P3/.vibe-rules/installed" | tr ',' '\n' | wc -l | tr -d ' ')"
-check "12 个 agent 全部记录（实际 ${AGENT_COUNT}）" test "$AGENT_COUNT" = "12"
+check "13 个条目全部记录（12 agent + 0 通用，实际 ${AGENT_COUNT}）" test "$AGENT_COUNT" = "13"
 check "verify 通过" "$R2/scripts/verify.sh" "$P3"
 refute "无效编号被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-bad" --agents "99" --yes
 check "--help 正常工作" "$R2/scripts/install.sh" --help
 check "update --help 正常工作" "$R2/scripts/update.sh" --help
+
+echo "== 6b. --agents 0（通用：不建额外入口文件） =="
+P0="$TMP_ROOT/proj-common-only"
+"$R2/scripts/install.sh" "$P0" --agents 0 --yes >/dev/null 2>&1
+check "0 号写入了 AGENTS.md 引用块" grep -q '<!-- vibe-rules:begin' "$P0/AGENTS.md"
+check "0 号证据文件记 agents=0" grep -q '^agents=0$' "$P0/.vibe-rules/installed"
+check "0 号 verify 通过" "$R2/scripts/verify.sh" "$P0"
+refute "0 号不建 CLAUDE.md" test -e "$P0/CLAUDE.md"
+refute "0 号不建 .cursorrules" test -e "$P0/.cursorrules"
+refute "0 号不建 .cursor/" test -e "$P0/.cursor"
+refute "0 号不建 .qoder/" test -e "$P0/.qoder"
+refute "0 号不建 .trae/" test -e "$P0/.trae"
+refute "0 号不建 .codebuddy/" test -e "$P0/.codebuddy"
+refute "0 号不建 .windsurfrules" test -e "$P0/.windsurfrules"
+refute "0 号不建 Copilot 指令文件" test -e "$P0/.github/copilot-instructions.md"
 
 echo "== 7. --copy 复制模式 =="
 P4="$TMP_ROOT/proj-copy"

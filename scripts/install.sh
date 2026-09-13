@@ -7,6 +7,8 @@
 # 选项：
 #   --all            安装所有 agent 入口（老用户批量接入用）
 #   --agents 1,3,5   只安装指定编号（逗号或空格分隔）
+#   --agents 0       通用项：只留根目录 AGENTS.md，不建任何额外入口文件
+#                    （Android Studio 等原生读 AGENTS.md 的工具用这个）
 #   --link           外链模式：项目里只放入口 + 引用块，规则本体留在本机规则库
 #                    （合规敏感、规则不便进仓库时用；默认是自包含副本模式）
 #   --no-personal    副本里不含 personal/（个人偏好与记忆不进项目仓库）
@@ -189,7 +191,7 @@ elif [ -n "$SELECTION_ARG" ]; then
 elif [ "$ASSUME_YES" = true ]; then
   SELECTION="all"
 else
-  echo "你用哪个 agent？输入编号（空格或逗号分隔多选），或输入 all 全选："
+  echo "你用哪个 agent？输入编号（空格或逗号分隔多选；0 = 通用，只留 AGENTS.md），或输入 all 全选："
   echo ""
   i=0
   while [ $i -lt "${#NUMS[@]}" ]; do

@@ -13,18 +13,19 @@
 # 例：
 #   ./scripts/new-project.sh ~/code/new-app --agents 1,3,12 --yes
 #   ./scripts/new-project.sh ~/code/new-app --link --agents 2 --yes
+#   ./scripts/new-project.sh ~/code/android-app --agents 0 --yes   # 只留 AGENTS.md（Android Studio 等）
 
 set -euo pipefail
 
 VIBE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 
 if [ $# -lt 1 ]; then
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 fi
 

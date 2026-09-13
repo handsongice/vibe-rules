@@ -5,7 +5,8 @@
 #
 # 覆盖 install/verify/uninstall/new-project/update 的：
 #   自包含副本模式（默认）、外链模式（-Link）、引用块注入、幂等、旧模板迁移、
-#   -Copy 复制模式、-NoPersonal、-Profile 策略档位、项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
+#   -Copy 复制模式、-NoPersonal、-Profile 策略档位、-AgentNums 0（通用项：不建额外入口）、
+#   项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
 #   另有 CI 接入 -WithCi（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）。
 #   末尾还有一条自检：PS 侧实测断言数（含本条）必须等于 README 里写的数。
 #
@@ -221,6 +222,21 @@ try {
     Write-Host "== 10. 无效编号 =="
     $code = Run-Script $Install @((Join-Path $TmpRoot "proj-bad"), "-AgentNums", "99", "-Yes")
     Refute "无效编号被拒绝（退出码非 0）" { $code -eq 0 }
+
+    Write-Host "== 10b. -AgentNums 0（通用：不建额外入口文件） =="
+    $P10 = Join-Path $TmpRoot "proj-common-only"
+    $code = Run-Script $Install @($P10, "-AgentNums", "0", "-Yes")
+    Check "0 号退出码 0" { $code -eq 0 }
+    Check "0 号写入了 AGENTS.md 引用块" { (Raw (Join-Path $P10 "AGENTS.md")).Contains("<!-- vibe-rules:begin") }
+    Check "0 号证据文件记 agents=0" { (Raw (Join-Path $P10 ".vibe-rules/installed")).Contains("agents=0") }
+    Check "0 号 verify 通过" { (Run-Script $Verify @($P10)) -eq 0 }
+    Refute "0 号不建 CLAUDE.md" { Test-Path (Join-Path $P10 "CLAUDE.md") }
+    Refute "0 号不建 .cursorrules" { Test-Path (Join-Path $P10 ".cursorrules") }
+    Refute "0 号不建 .qoder" { Test-Path (Join-Path $P10 ".qoder") }
+    Refute "0 号不建 .trae" { Test-Path (Join-Path $P10 ".trae") }
+    Refute "0 号不建 .codebuddy" { Test-Path (Join-Path $P10 ".codebuddy") }
+    Refute "0 号不建 .windsurfrules" { Test-Path (Join-Path $P10 ".windsurfrules") }
+    Refute "0 号不建 Copilot 指令文件" { Test-Path (Join-Path $P10 ".github/copilot-instructions.md") }
 
     Write-Host "== 11. new-project + update =="
     $P6 = Join-Path $TmpRoot "newproj"
