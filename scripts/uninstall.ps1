@@ -169,6 +169,21 @@ elseif (Test-Path ".vibe-rules" -PathType Container) {
     }
 }
 
+# ---------- 本工具生成的 CI workflow ----------
+# 只删 install -WithCi 生成的那个（按文件里的标记识别），项目自己的 workflow 一律不动
+$ciFile = ".github\workflows\vibe-rules-verify.yml"
+if (Test-Path $ciFile) {
+    $ciHead = Get-Content -LiteralPath $ciFile -TotalCount 40 -ErrorAction SilentlyContinue
+    if ($ciHead -match 'vibe-rules install --with-ci 生成') {
+        Remove-Item $ciFile -Force
+        Write-Host "  ✅ 删除 $ciFile（本工具生成的 CI 校验）"
+        $script:removed++
+        if ((Test-Path ".github\workflows") -and -not (Get-ChildItem ".github\workflows" -Force | Select-Object -First 1)) {
+            Remove-Item ".github\workflows" -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # ---------- 清理空目录 ----------
 if (Test-Path $ConfFile) {
     Get-Content $ConfFile | ForEach-Object {

@@ -18,6 +18,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: vibe-rules-lint
+        name: lint（bash 3.2 变量坑 / sh-ps1 配对 / 选项对称）
+        entry: bash scripts/lint.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: vibe-rules-validate-package
         name: validate-package（skill 结构 + 插件清单 + 版本一致）
         entry: bash scripts/validate-package.sh

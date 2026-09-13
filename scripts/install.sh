@@ -14,6 +14,8 @@
 #   --profile hybrid   混合档：副本进仓库，但 personal/ 不进仓库、只在本机外链
 #   --profile personal 个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   --copy           入口用真实文件复制代替 symlink（云端 agent / 无 symlink 环境）
+#   --with-ci        同一条命令生成 .github/workflows/vibe-rules-verify.yml
+#                    （PR 上校验副本漂移 + 接入完整性；只对副本模式有意义）
 #   --yes            非交互模式（配合 --all / --agents）
 #   -h, --help       显示帮助
 #
@@ -45,6 +47,7 @@ WITH_PERSONAL=true
 PROFILE="default"
 PERSONAL_REF=""                 # 空 = 个人层跟着规则本体；hybrid 档指向本机规则库
 SELECTION_ARG=""
+WITH_CI=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -70,6 +73,7 @@ while [ $# -gt 0 ]; do
       ;;
     --profile=*) PROFILE="${1#--profile=}" ;;
     --copy) COPY_MODE=true ;;
+    --with-ci) WITH_CI=true ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
     --)
@@ -163,6 +167,14 @@ if [ "${#NUMS[@]}" -eq 0 ]; then
 fi
 
 VIBE_VERSION="$(git -C "$VIBE_HOME" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# CI 校验用：规则库远端地址 + 这次安装钉住的 commit（--with-ci 写进 workflow）
+RULES_REPO="$(git -C "$VIBE_HOME" remote get-url origin 2>/dev/null || true)"
+[ -n "$RULES_REPO" ] || RULES_REPO="https://github.com/handsongice/vibe-rules.git"
+case "$RULES_REPO" in
+  git@github.com:*) RULES_REPO="https://github.com/${RULES_REPO#git@github.com:}" ;;
+esac
+RULES_SHA="$(git -C "$VIBE_HOME" rev-parse HEAD 2>/dev/null || true)"
+[ -n "$RULES_SHA" ] || RULES_SHA="main"
 INSTALLED_AT="$(date +%Y-%m-%d)"
 
 echo "📦 规则库：$VIBE_HOME"
@@ -277,6 +289,7 @@ if [ "$MODE" = "embedded" ]; then
               --exclude=/projects --exclude=/project --exclude=/inbox
               --exclude=/.agents --exclude=/.claude-plugin --exclude=/.codex-plugin
               --exclude=/VERSION --exclude=/CHANGELOG.md
+              --exclude=/.pre-commit-config.yaml --exclude=/RELEASE-NOTES.md
               --exclude=/ModuleAnalysisCache* --exclude=/StartupProfileData*)
   # 旧版曾把打包产物复制进副本：精确清掉，避免遗留（project/ 绝不在此列）
   for stale in .agents .claude-plugin .codex-plugin; do
@@ -284,7 +297,7 @@ if [ "$MODE" = "embedded" ]; then
       rm -rf -- "$RULES_DIR/$stale"
     fi
   done
-  for stale in VERSION CHANGELOG.md .gitattributes; do
+  for stale in VERSION CHANGELOG.md .gitattributes .pre-commit-config.yaml RELEASE-NOTES.md; do
     rm -f -- "$RULES_DIR/$stale"
   done
   # pwsh 在只读 HOME 环境会把运行时缓存落到工作目录；旧版可能被复制进副本，一并清掉
@@ -345,6 +358,27 @@ else
     sed -e "s|@SLUG@|${SLUG}|g" "$VIBE_HOME/templates/PROJECT-NOTES.md" \
         > "$LINK_NOTES_DIR/README.md"
     echo "📝 规则库里建了项目专属笔记：$LINK_NOTES_DIR/README.md"
+  fi
+fi
+
+# ---------- GitHub Action（可选）：PR 上校验副本漂移 + 接入完整性 ----------
+if [ "$WITH_CI" = true ]; then
+  if [ "$MODE" != "embedded" ]; then
+    echo "⏭️  --with-ci 跳过：外链模式的规则库在本机，CI 里读不到（要 CI 校验请用副本模式）"
+  else
+    CI_FILE="$PROJECT_ROOT/.github/workflows/vibe-rules-verify.yml"
+    if [ -f "$CI_FILE" ] && ! grep -q 'vibe-rules install --with-ci 生成' "$CI_FILE" 2>/dev/null; then
+      echo "   ℹ️  .github/workflows/vibe-rules-verify.yml 已存在且不是 vibe-rules 生成的，保留不动"
+      echo "       （想换成模板：手动复制 ${VIBE_HOME}/templates/CI-VERIFY.yml）"
+    else
+      if [ "$RULES_SHA" != "main" ] && ! git -C "$VIBE_HOME" branch -r --contains HEAD 2>/dev/null | grep -q .; then
+        echo "   ⚠️  本机规则库的 HEAD 还没推到远端：CI 里可能拉不到这个 commit（先 push，或改 workflow 里的 VIBE_RULES_SHA）"
+      fi
+      mkdir -p "$PROJECT_ROOT/.github/workflows"
+      sed -e "s|@VIBE_REPO@|${RULES_REPO}|g" -e "s|@VIBE_SHA@|${RULES_SHA}|g" \
+          "$VIBE_HOME/templates/CI-VERIFY.yml" > "$CI_FILE"
+      echo "   ✅ .github/workflows/vibe-rules-verify.yml（PR 上校验副本漂移 + 接入完整性）"
+    fi
   fi
 fi
 

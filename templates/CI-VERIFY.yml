@@ -1,0 +1,42 @@
+# vibe-rules 接入校验（由 vibe-rules install --with-ci 生成；可自行调整）
+#
+# 校验两件事：
+#   1. 项目里提交的 .vibe-rules/ 副本有没有被手改、有没有漂移（check-copy.sh）
+#   2. 接入本身有没有坏：证据文件、AGENTS.md 引用块、各 agent 入口文件、档位落实（verify.sh）
+#
+# 规则库在另一个仓库，所以这里钉住一个 commit 拉到临时目录，再用它的脚本查你的项目：
+#   - 想跟着规则库 main 走：把 VIBE_RULES_SHA 改成 main（副本过期时 CI 会报红，属预期）
+#   - 规则库升级后想重新钉：重跑 install --with-ci（会覆盖本文件，自己改过就先备份）
+#   - 规则库是私有仓库：给这个 job 加 token/权限，或把 VIBE_RULES_REPO 换成你 fork 的地址
+#
+# 只对副本模式（embedded）有意义：外链模式的规则库在你本机，CI 里读不到。
+
+name: vibe-rules
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      VIBE_RULES_REPO: @VIBE_REPO@
+      VIBE_RULES_SHA: @VIBE_SHA@
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 拉规则库（钉 commit）
+        run: |
+          git init -q "$RUNNER_TEMP/vibe-rules"
+          cd "$RUNNER_TEMP/vibe-rules"
+          git remote add origin "$VIBE_RULES_REPO"
+          git fetch -q --depth 1 origin "$VIBE_RULES_SHA"
+          git checkout -q FETCH_HEAD
+
+      - name: 副本漂移检查（.vibe-rules/ 与规则库逐文件比对）
+        run: bash "$RUNNER_TEMP/vibe-rules/scripts/check-copy.sh" "$GITHUB_WORKSPACE"
+
+      - name: 接入校验（证据文件 / 引用块 / 入口文件 / 档位）
+        run: bash "$RUNNER_TEMP/vibe-rules/scripts/verify.sh" "$GITHUB_WORKSPACE"

@@ -177,6 +177,16 @@ elif [ -d ".vibe-rules" ]; then
   fi
 fi
 
+# ---------- 本工具生成的 CI workflow ----------
+# 只删 install --with-ci 生成的那个（按文件里的标记识别），项目自己的 workflow 一律不动
+CI_FILE=".github/workflows/vibe-rules-verify.yml"
+if [ -f "$CI_FILE" ] && grep -q 'vibe-rules install --with-ci 生成' "$CI_FILE" 2>/dev/null; then
+  rm -f "$CI_FILE"
+  echo "  ✅ 删除 ${CI_FILE}（本工具生成的 CI 校验）"
+  removed=$((removed+1))
+  rmdir ".github/workflows" 2>/dev/null || true
+fi
+
 # ---------- 清理空目录 ----------
 if [ -f "$CONF_FILE" ]; then
   while IFS='|' read -r num name type path doc; do

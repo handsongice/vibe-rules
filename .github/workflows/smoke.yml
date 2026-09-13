@@ -23,6 +23,9 @@ jobs:
           bash --version | head -n 1
           uname -a
 
+      - name: 脚本 lint（bash 3.2 坑 / sh-ps1 配对 / 选项对称）
+        run: bash scripts/lint.sh
+
       - name: 打包校验（skill 结构 / 清单一致 / 版本同步）
         run: bash scripts/validate-package.sh
 
@@ -33,6 +36,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           /bin/bash --version | head -n 1
+          /bin/bash scripts/lint.sh
           /bin/bash tests/smoke.sh
 
   powershell:

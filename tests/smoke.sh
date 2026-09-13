@@ -20,6 +20,9 @@
 #  14. 插件打包：skill 结构 / 清单一致性 / 版本同步 / pre-commit 与 preflight
 #  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ hybrid（副本进仓库 + personal 本机外链）/ personal（外链不进仓库）+ 冲突拒绝
 #  16. 文档状态管理：docs-status.sh 汇总 / --stale / --check / --archive（含 git 仓库 git mv）
+#  17. 脚本 lint：lint.sh 全绿 + 三类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称）
+#  18. 副本漂移检查 check-copy.sh（一致 / 手改 / 缺文件 / 多文件 / 外链跳过 / 用法错）
+#  19. CI 接入 --with-ci（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）
 
 set -euo pipefail
 
@@ -272,6 +275,9 @@ check "pre-commit 挂了 smoke" grep -q 'tests/smoke.sh' "$R2/.pre-commit-config
 check "preflight.sh 可执行" test -x "$R2/scripts/preflight.sh"
 check "preflight.sh --help 正常" bash "$R2/scripts/preflight.sh" --help
 check "preflight 里挂了 pwsh 冒烟（无 pwsh 时自动跳过）" grep -q 'smoke.ps1' "$R2/scripts/preflight.sh"
+check "pre-commit 挂了 lint" grep -q 'scripts/lint.sh' "$R2/.pre-commit-config.yaml"
+check "preflight 里挂了 lint" grep -q 'scripts/lint.sh' "$R2/scripts/preflight.sh"
+check "CI 里挂了 lint（含 macOS bash 3.2 一档）" bash -c "grep -c 'scripts/lint.sh' '$R2/.github/workflows/smoke.yml' | grep -qx 2"
 check "Codex 清单 skills 指向目录（官方规范）" grep -q '"skills": "./skills/"' "$R2/.codex-plugin/plugin.json"
 check "Claude 清单 skills 列出全部 skill" grep -q './skills/code-review' "$R2/.claude-plugin/plugin.json"
 check "每个 skill 有 agents/openai.yaml" test -f "$R2/skills/code-review/agents/openai.yaml"
@@ -430,6 +436,157 @@ check "docs-status：git 仓库 --archive 正常" bash "$R2/scripts/docs-status.
 check "docs-status：git 归档文件到位" test -f "$DSG/docs/plans/archive/2026-02-02-done.md"
 check "docs-status：git 里是改名（归档文件仍被跟踪）" bash -c "git -C '$DSG' ls-files --error-unmatch docs/plans/archive/2026-02-02-done.md"
 refute "docs-status：git 原路径已不再跟踪" bash -c "git -C '$DSG' ls-files --error-unmatch docs/plans/2026-02-02-done.md"
+
+echo "== 17. 脚本 lint（lint.sh） =="
+check "lint.sh --help 正常" bash "$R2/scripts/lint.sh" --help
+check "lint.sh 在规则库副本上全绿" bash "$R2/scripts/lint.sh" "$R2"
+refute "lint.sh 对不存在的目录报错" bash "$R2/scripts/lint.sh" "$TMP_ROOT/definitely-not-here"
+
+# 负例 1：$VAR 后紧跟全角标点（bash 3.2 会连字节一起吞成变量名 → unbound variable）
+L1="$TMP_ROOT/lint-neg1"
+mkdir -p "$L1/scripts"
+# 用 %s 拼出 "$X（…"：本文件自身不能出现这种写法，否则会被 lint ① 抓到（自证有效）
+printf '#!/usr/bin/env bash\nX=1\necho "$%s（测试）"\n' "X" > "$L1/scripts/demo.sh"
+printf 'param()\n' > "$L1/scripts/demo.ps1"
+refute "lint 抓到 \$VAR 紧贴非 ASCII" bash "$R2/scripts/lint.sh" "$L1"
+L1_OUT="$(bash "$R2/scripts/lint.sh" "$L1" 2>&1 || true)"
+check "lint 报错点名具体文件" has "$L1_OUT" "scripts/demo.sh"
+check "lint 给出修法（花括号）" has "$L1_OUT" "花括号"
+refute "① 命中时不打印全绿（假绿回归）" has "$L1_OUT" "全部通过"
+check "① 命中计入失败数" has "$L1_OUT" "1 失败"
+
+# 正例：位置参数 $1 后接全角不触发 ①（bash 不会把它当变量名，但仍建议 ${1}）
+# 提示语里不放引号包着的 --flag，避免 ③ 的选项提取把用例本身当选项（单一成因）
+L2="$TMP_ROOT/lint-pos"
+mkdir -p "$L2/scripts"
+printf '#!/usr/bin/env bash\necho "未知参数：$1（只支持 check）" >&2\n' > "$L2/scripts/pos-demo.sh"
+printf 'param()\n' > "$L2/scripts/pos-demo.ps1"
+check "lint 不误报位置参数 \$1 后接全角" bash "$R2/scripts/lint.sh" "$L2"
+
+# 负例 2：sh 有、ps1 缺
+L3="$TMP_ROOT/lint-neg2"
+mkdir -p "$L3/scripts"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L3/scripts/pair-demo.sh"
+refute "lint 抓到缺 ps1 的成对脚本" bash "$R2/scripts/lint.sh" "$L3"
+
+# 负例 3：选项不对称（sh 认 --foo，ps1 没有 -Foo）
+L4="$TMP_ROOT/lint-neg3"
+mkdir -p "$L4/scripts"
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --foo) echo foo ;;\nesac\n' > "$L4/scripts/opt-demo.sh"
+printf 'param([switch]$Bar)\n' > "$L4/scripts/opt-demo.ps1"
+refute "lint 抓到选项不对称" bash "$R2/scripts/lint.sh" "$L4"
+L4_OUT="$(bash "$R2/scripts/lint.sh" "$L4" 2>&1 || true)"
+check "选项不对称报错含选项名" has "$L4_OUT" "--foo"
+
+# 负例 4：单侧白名单与双扩展名矛盾（lint.ps1 不该出现）
+L5="$TMP_ROOT/lint-neg4"
+mkdir -p "$L5/scripts"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L5/scripts/lint.sh"
+printf 'param()\n' > "$L5/scripts/lint.ps1"
+refute "lint 抓到白名单里出现双扩展名" bash "$R2/scripts/lint.sh" "$L5"
+
+echo "== 18. 副本漂移检查（check-copy.sh） =="
+CC="$TMP_ROOT/proj-checkcopy"
+mkdir -p "$CC"
+"$R2/scripts/install.sh" "$CC" --agents 1 --yes >/dev/null 2>&1
+check "check-copy：干净副本全绿" bash "$R2/scripts/check-copy.sh" "$CC"
+CC_OUT="$(bash "$R2/scripts/check-copy.sh" "$CC" 2>&1)"
+check "check-copy：报告比对文件数 + 0 漂移" has "$CC_OUT" "0 处漂移"
+check "check-copy：--rules-home 指到规则库通过" bash "$R2/scripts/check-copy.sh" "$CC" --rules-home "$R2"
+check "check-copy：--help 正常" bash "$R2/scripts/check-copy.sh" --help
+check "check-copy：不传参数时查当前目录（在项目里跑）" bash -c "cd '$CC' && bash '$R2/scripts/check-copy.sh'"
+refute "check-copy：目录不存在报错" bash "$R2/scripts/check-copy.sh" "$TMP_ROOT/definitely-not-here"
+refute "check-copy：没接入的项目报错" bash "$R2/scripts/check-copy.sh" "$TMP_ROOT"
+refute "check-copy：--rules-home 缺参报错" bash "$R2/scripts/check-copy.sh" "$CC" --rules-home
+refute "check-copy：未知参数报错" bash "$R2/scripts/check-copy.sh" "$CC" --bogus
+check "check-copy：用法错退出码是 2" bash -c "bash '$R2/scripts/check-copy.sh' '$CC' --nope >/dev/null 2>&1; test \$? -eq 2"
+refute "check-copy：规则库路径 = 项目路径时报错" bash "$R2/scripts/check-copy.sh" "$CC" --rules-home "$CC"
+
+# 手改副本：必须报漂移（不然 CI 装了也拦不住）
+printf '\n# 手改，规则库没有这一行\n' >> "$CC/.vibe-rules/global/anti-patterns.md"
+refute "check-copy：手改副本报漂移（退出码非 0）" bash "$R2/scripts/check-copy.sh" "$CC"
+CC_OUT="$(bash "$R2/scripts/check-copy.sh" "$CC" 2>&1 || true)"
+check "check-copy：点名被改的文件" has "$CC_OUT" "global/anti-patterns.md"
+check "check-copy：给出修法（改规则库不改副本）" has "$CC_OUT" "别改副本"
+
+# 副本缺文件 / 多文件
+rm "$CC/.vibe-rules/global/anti-patterns.md"
+refute "check-copy：副本缺文件报漂移" bash "$R2/scripts/check-copy.sh" "$CC"
+"$R2/scripts/install.sh" "$CC" --agents 1 --yes >/dev/null 2>&1
+printf 'x\n' > "$CC/.vibe-rules/global/mine-only.md"
+refute "check-copy：副本多出文件报漂移" bash "$R2/scripts/check-copy.sh" "$CC"
+rm -f "$CC/.vibe-rules/global/mine-only.md"
+check "check-copy：刷新后恢复全绿" bash "$R2/scripts/check-copy.sh" "$CC"
+
+# 外链模式：规则库在本机，没副本可比，跳过而不是误报
+CCL="$TMP_ROOT/proj-checkcopy-link"
+mkdir -p "$CCL"
+"$R2/scripts/install.sh" "$CCL" --link --agents 1 --yes >/dev/null 2>&1
+check "check-copy：外链模式跳过（退出码 0）" bash "$R2/scripts/check-copy.sh" "$CCL"
+CCL_OUT="$(bash "$R2/scripts/check-copy.sh" "$CCL" 2>&1)"
+check "check-copy：外链模式说明是「跳过漂移检查」" has "$CCL_OUT" "跳过漂移检查"
+
+echo "== 19. CI 接入（install --with-ci） =="
+# 规则库副本先建成一个 git 仓库（带 git@ 远端）：验证地址转换 + commit 钉死
+R2G="$TMP_ROOT/rules-withci"
+copy_repo "$R2G"
+(
+  cd "$R2G" || exit 1
+  git init -q .
+  git remote add origin git@github.com:handsongice/vibe-rules.git
+  git add -A
+  git -c user.email=smoke@example.com -c user.name=smoke commit -qm init
+) >/dev/null 2>&1
+CI="$TMP_ROOT/proj-withci"
+mkdir -p "$CI"
+check "install --with-ci 正常退出" bash "$R2G/scripts/install.sh" "$CI" --agents 1 --yes --with-ci
+CI_YML="$CI/.github/workflows/vibe-rules-verify.yml"
+check "生成了 CI workflow" test -f "$CI_YML"
+refute "workflow 里没有未替换的占位符" grep -q '@VIBE_REPO@\|@VIBE_SHA@' "$CI_YML"
+check "git@ 远端地址转成 https" grep -q 'VIBE_RULES_REPO: https://github.com/handsongice/vibe-rules.git' "$CI_YML"
+check "workflow 钉的是 commit（不是浮动 main）" grep -qE 'VIBE_RULES_SHA: [0-9a-f]{40}' "$CI_YML"
+check "workflow 调 check-copy.sh（副本漂移）" grep -q 'check-copy.sh' "$CI_YML"
+check "workflow 调 verify.sh（接入完整性）" grep -q 'verify.sh' "$CI_YML"
+check "装了 CI 的项目 verify 仍通过" bash "$R2G/scripts/verify.sh" "$CI"
+check "CI workflow 不进副本" test ! -e "$CI/.vibe-rules/templates"
+check "副本不带规则库自己的 pre-commit（引用的 scripts/ 不存在）" test ! -e "$CI/.vibe-rules/.pre-commit-config.yaml"
+check "副本不带 RELEASE-NOTES.md" test ! -e "$CI/.vibe-rules/RELEASE-NOTES.md"
+
+# 规则库没有 git 时：地址与 commit 都有兜底，不能写出空占位符
+R2N="$TMP_ROOT/rules-nogit"
+copy_repo "$R2N"
+CIN="$TMP_ROOT/proj-withci-nogit"
+mkdir -p "$CIN"
+"$R2N/scripts/install.sh" "$CIN" --agents 1 --yes --with-ci >/dev/null 2>&1
+CIN_YML="$CIN/.github/workflows/vibe-rules-verify.yml"
+check "无 git 的规则库：地址兜底成默认远端" grep -q 'VIBE_RULES_REPO: https://github.com/handsongice/vibe-rules.git' "$CIN_YML"
+check "无 git 的规则库：SHA 兜底成 main" grep -q 'VIBE_RULES_SHA: main' "$CIN_YML"
+
+# 用户自己的同名 workflow：不许覆盖
+printf '# 我自己的\nname: mine\n' > "$CI_YML"
+"$R2G/scripts/install.sh" "$CI" --agents 1 --yes --with-ci >/dev/null 2>&1
+check "同名用户 workflow 保留不动" grep -q 'name: mine' "$CI_YML"
+CI_OUT="$(bash "$R2G/scripts/install.sh" "$CI" --agents 1 --yes --with-ci 2>&1)"
+check "并打印保留提示" has "$CI_OUT" "保留不动"
+
+# 我们的文件：update --with-ci 重新钉 commit
+rm -f "$CI_YML"
+"$R2G/scripts/install.sh" "$CI" --agents 1 --yes --with-ci >/dev/null 2>&1
+sed -e 's/^      VIBE_RULES_SHA: .*/      VIBE_RULES_SHA: 0000000000000000000000000000000000000000/' "$CI_YML" > "$CI_YML.tmp"
+mv "$CI_YML.tmp" "$CI_YML"
+check "update --with-ci 正常退出" bash "$R2G/scripts/update.sh" "$CI" --with-ci --yes
+refute "update --with-ci 把 SHA 钉回当前 commit" grep -q 'VIBE_RULES_SHA: 0000' "$CI_YML"
+
+# 外链模式不生成 CI（规则库在本机，CI 跑不了）
+CCL_OUT="$(bash "$R2G/scripts/install.sh" "$CCL" --link --with-ci --agents 1 --yes 2>&1)"
+refute "外链模式不生成 CI workflow" test -e "$CCL/.github/workflows/vibe-rules-verify.yml"
+check "外链模式说明为什么跳过" has "$CCL_OUT" "CI 里读不到"
+
+# uninstall：只删本工具生成的，用户自己的 workflow 一律不动
+printf '# 别动我\nname: keepme\n' > "$CI/.github/workflows/keep.yml"
+check "uninstall 正常退出" bash "$R2G/scripts/uninstall.sh" "$CI"
+refute "uninstall 删掉本工具生成的 workflow" test -e "$CI_YML"
+check "uninstall 保留用户自己的 workflow" test -f "$CI/.github/workflows/keep.yml"
 
 echo ""
 echo "📊 smoke：$PASS 通过，$FAIL 失败"

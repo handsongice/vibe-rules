@@ -1,7 +1,7 @@
 # update.ps1 —— 把项目里的 vibe-rules 规则副本刷新到规则库最新版（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\update.ps1 [项目路径] [-Link] [-NoPersonal] [-Copy] [-Yes]
+#   pwsh scripts\update.ps1 [项目路径] [-All | -AgentNums 1,3] [-Link] [-NoPersonal] [-Profile team|hybrid|personal] [-Copy] [-Yes] [-WithCi]
 #
 # 做的事：
 #   - 重新复制规则本体到 <项目>\.vibe-rules\（embedded 模式，默认）
@@ -10,17 +10,25 @@
 #   - 没显式指定 mode/profile/agent 时，沿用证据文件里上次安装的选择
 #
 # 选项：
+#   -All            全选 agents（覆盖沿用）
+#   -AgentNums 1,3  只带指定编号的 agents（覆盖沿用）
 #   -Link           显式切回/保持外链模式（一般不传：自动沿用上次安装的模式）
 #   -NoPersonal     副本不含 personal\
+#   -Profile        策略档位（team|hybrid|personal，覆盖沿用）
 #   -Copy           入口用复制文件代替 symlink
+#   -WithCi         顺手把 .github\workflows\vibe-rules-verify.yml 重新钉到当前规则库 commit
 #   -Yes            非交互
 #   -Help           显示本帮助
 
 param(
     [Parameter(Position=0)][string]$ProjectRoot = ".",
+    [switch]$All,
+    [string]$AgentNums = "",
     [switch]$Link,
     [switch]$NoPersonal,
+    [string]$Profile = "",
     [switch]$Copy,
+    [switch]$WithCi,
     [switch]$Yes,
     [switch]$Help
 )
@@ -76,18 +84,29 @@ foreach ($line in ((Get-Content $evidence -Raw) -split "`r?`n")) {
 }
 
 $installParams = @{ ProjectRoot = $ProjectRoot }
-# 显式传了 -Link / -NoPersonal 就按用户的来，不再沿用档位
-$explicitOverride = $Link -or $NoPersonal
-if (-not $explicitOverride -and ($profileFromEvidence -eq "team" -or $profileFromEvidence -eq "hybrid" -or $profileFromEvidence -eq "personal")) {
-    # 档位是装的时候定的策略，更新时原样沿用
-    $installParams["Profile"] = $profileFromEvidence
-} else {
-    if ($Link -or $modeFromEvidence -eq "link") { $installParams["Link"] = $true }
-    if ($NoPersonal) { $installParams["NoPersonal"] = $true }
+
+# 显式传了 -Link / -NoPersonal / -Profile 就按用户的来，不再沿用档位（与 update.sh 一致）
+$explicitOverride = $Link -or $NoPersonal -or ($Profile -ne "")
+if (-not $explicitOverride) {
+    if ($profileFromEvidence -eq "team" -or $profileFromEvidence -eq "hybrid" -or $profileFromEvidence -eq "personal") {
+        # 档位是装的时候定的策略，更新时原样沿用（team/hybrid 顺带带上 no-personal 的语义）
+        $installParams["Profile"] = $profileFromEvidence
+    } elseif ($modeFromEvidence -eq "link") {
+        $installParams["Link"] = $true
+    }
 }
+if ($Link) { $installParams["Link"] = $true }
+if ($NoPersonal) { $installParams["NoPersonal"] = $true }
+if ($Profile -ne "") { $installParams["Profile"] = $Profile }
+if ($All) { $installParams["All"] = $true }
+if ($AgentNums -ne "") { $installParams["AgentNums"] = $AgentNums }
 if ($Copy) { $installParams["Copy"] = $true }
-if ($agentsFromEvidence) { $installParams["AgentNums"] = $agentsFromEvidence }
-$installParams["Yes"] = $true
+if ($WithCi) { $installParams["WithCi"] = $true }
+# 没显式指定 agent 时沿用证据里的名单，并 --yes 跳过交互（与 update.sh 一致）
+if (-not $All -and $AgentNums -eq "" -and $agentsFromEvidence) {
+    $installParams["AgentNums"] = $agentsFromEvidence
+    $installParams["Yes"] = $true
+}
 
 & (Join-Path $ScriptDir "install.ps1") @installParams
 

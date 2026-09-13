@@ -1,7 +1,7 @@
 # install.ps1 —— 在你的开发项目里接入 vibe-rules（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Profile team|hybrid|personal] [-Copy] [-Yes]
+#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Profile team|hybrid|personal] [-Copy] [-Yes] [-WithCi]
 #
 # 选项：
 #   -All            安装所有 agent 入口
@@ -12,6 +12,7 @@
 #   -Profile hybrid    混合档：副本进仓库，但 personal\ 不进仓库、只在本机外链
 #   -Profile personal  个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   -Copy           入口用真实文件复制代替 symlink（无 symlink 权限时的默认降级也一样）
+#   -WithCi         生成 .github\workflows\vibe-rules-verify.yml（PR 上校验副本漂移 + 接入完整性；只对副本模式有意义）
 #   -Yes            非交互模式（配合 -All / -AgentNums）
 #   -Help           显示本帮助
 #
@@ -30,6 +31,7 @@ param(
     [switch]$NoPersonal,
     [string]$Profile = "default",
     [switch]$Copy,
+    [switch]$WithCi,
     [switch]$Yes
 )
 
@@ -206,7 +208,7 @@ if ($Mode -eq "embedded") {
     # 排除清单：工具与打包清单不跟着项目走（项目只需要规则本体）
     $exclude = @(".git", ".github", ".gitignore", ".gitattributes", "scripts", "tests", "templates",
                  "projects", "project", "inbox", ".agents", ".claude-plugin", ".codex-plugin",
-                 "VERSION", "CHANGELOG.md")
+                 "VERSION", "CHANGELOG.md", ".pre-commit-config.yaml", "RELEASE-NOTES.md")
     $rootLen = $VibeHome.Length + 1
     Get-ChildItem -Path $VibeHome -Recurse -Force | ForEach-Object {
         $rel = $_.FullName.Substring($rootLen)
@@ -227,7 +229,8 @@ if ($Mode -eq "embedded") {
     }
 
     # 清掉旧版曾装进来的打包产物（保持幂等，也让 --purge-project 能删净）
-    foreach ($stale in @(".agents", ".claude-plugin", ".codex-plugin", "VERSION", "CHANGELOG.md", ".gitattributes")) {
+    foreach ($stale in @(".agents", ".claude-plugin", ".codex-plugin", "VERSION", "CHANGELOG.md", ".gitattributes",
+                         ".pre-commit-config.yaml", "RELEASE-NOTES.md")) {
         $stalePath = Join-Path $RulesDir $stale
         if (Test-Path -LiteralPath $stalePath) {
             Remove-Item -LiteralPath $stalePath -Recurse -Force -ErrorAction SilentlyContinue
@@ -298,6 +301,49 @@ if ($Mode -eq "embedded") {
         $notes = $notes.Replace("@SLUG@", $Slug)
         [System.IO.File]::WriteAllText((Join-Path $linkNotes "README.md"), $notes, (New-Object System.Text.UTF8Encoding($false)))
         Write-Host "📝 规则库里建了项目专属笔记：$linkNotes\README.md"
+    }
+}
+
+# ---------- GitHub Action（可选）：PR 上校验副本漂移 + 接入完整性 ----------
+if ($WithCi) {
+    if ($Mode -ne "embedded") {
+        Write-Host "⏭️  -WithCi 跳过：外链模式的规则库在本机，CI 里读不到（要 CI 校验请用副本模式）"
+    } else {
+        $ciFile = Join-Path $ProjectRoot ".github\workflows\vibe-rules-verify.yml"
+        $ciOurs = $false
+        if (Test-Path $ciFile) {
+            $ciHead = Get-Content -LiteralPath $ciFile -TotalCount 40 -ErrorAction SilentlyContinue
+            if ($ciHead -match 'vibe-rules install --with-ci 生成') { $ciOurs = $true }
+        }
+        if ((Test-Path $ciFile) -and -not $ciOurs) {
+            Write-Host "   ℹ️  .github\workflows\vibe-rules-verify.yml 已存在且不是 vibe-rules 生成的，保留不动"
+            Write-Host "       （想换成模板：手动复制 $VibeHome\templates\CI-VERIFY.yml）"
+        } else {
+            $rulesRepo = $null
+            try { $rulesRepo = & git -C $VibeHome remote get-url origin 2>$null } catch { }
+            if (-not $rulesRepo) { $rulesRepo = "https://github.com/handsongice/vibe-rules.git" }
+            $rulesRepo = $rulesRepo.Trim()
+            if ($rulesRepo -like "git@github.com:*") {
+                $rulesRepo = "https://github.com/" + $rulesRepo.Substring("git@github.com:".Length)
+            }
+            $rulesSha = $null
+            try { $rulesSha = & git -C $VibeHome rev-parse HEAD 2>$null } catch { }
+            if (-not $rulesSha) { $rulesSha = "main" }
+            $rulesSha = $rulesSha.Trim()
+            if ($rulesSha -ne "main") {
+                $hasRemote = $false
+                try { $hasRemote = [bool](& git -C $VibeHome branch -r --contains HEAD 2>$null) } catch { }
+                if (-not $hasRemote) {
+                    Write-Host "   ⚠️  本机规则库的 HEAD 还没推到远端：CI 里可能拉不到这个 commit（先 push，或改 workflow 里的 VIBE_RULES_SHA）"
+                }
+            }
+            $ciDir = Split-Path -Parent $ciFile
+            if (-not (Test-Path $ciDir)) { New-Item -ItemType Directory -Path $ciDir -Force | Out-Null }
+            $ciTpl = [System.IO.File]::ReadAllText((Join-Path $VibeHome "templates\CI-VERIFY.yml"))
+            $ciTpl = $ciTpl.Replace("@VIBE_REPO@", $rulesRepo).Replace("@VIBE_SHA@", $rulesSha)
+            [System.IO.File]::WriteAllText($ciFile, $ciTpl, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "   ✅ .github\workflows\vibe-rules-verify.yml（PR 上校验副本漂移 + 接入完整性）"
+        }
     }
 }
 

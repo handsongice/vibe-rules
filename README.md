@@ -74,6 +74,7 @@ scripts/install.sh <项目路径> [选项]
   --profile hybrid   混合档 = 副本进仓库，但 personal/ 不进仓库、只在本机外链
   --profile personal 个人档 = 外链模式（规则不进仓库），个人层照常带上
   --copy           用复制文件代替 symlink（symlink 被 Windows/Git 限制时用）
+  --with-ci        顺手在项目里生成 .github/workflows/vibe-rules-verify.yml（PR 上查副本漂移）
   --yes            非交互（不带 --agents 时等价于 --all，CI / 批量接入用）
   --help           查看全部参数
 ```
@@ -196,9 +197,11 @@ vibe-rules/（你 clone 到的任意路径）
 ├── projects/              # 本机项目专属沉淀（new-project 在外链模式下用；默认不提交）
 │   └── <项目名>/          # 每个项目一个目录
 ├── inbox/                 # 还没归类的灵感/素材，定期 review 转正
-├── templates/             # AGENTS.md 模板 + 副本入口指南（ENTRY.md）+ 项目笔记模板（PROJECT-NOTES.md）
+├── templates/             # AGENTS.md 模板 + 副本入口指南（ENTRY.md）+ 项目笔记模板 + CI 校验模板（CI-VERIFY.yml）
 ├── tests/                 # 端到端冒烟测试（smoke.sh + smoke.ps1）
 ├── scripts/               # 安装/更新/验证/卸载/迁移脚本（sh + ps1 双份；agent 清单在 agents.conf）
+│   ├── lint.sh            # 规则库自查：bash 3.2 变量坑 / sh-ps1 配对 / 选项对称
+│   └── check-copy.sh      # 副本漂移检查：项目的 .vibe-rules 与规则库逐文件比对（项目 CI 用）
 ├── .codex-plugin/         # Codex 插件清单（plugin.json）
 ├── .claude-plugin/        # Claude Code 插件清单 + marketplace
 ├── .agents/plugins/       # Codex repo marketplace
@@ -220,6 +223,13 @@ your-project/
     └── project/README.md  # 项目专属笔记：只在不存在时建档、永不覆盖，建议跟代码一起提交
 ```
 
+用了 `--with-ci` 还多一个（不想用就删掉，或再加 `.gitignore`）：
+
+```
+your-project/
+└── .github/workflows/vibe-rules-verify.yml   # PR 上查副本漂移 + 接入完整性（见上文）
+```
+
 ## 日常怎么沉淀
 
 开发过程中积累的东西，按类型放：
@@ -235,6 +245,39 @@ your-project/
 | 还没想好归哪 | `inbox/` | 稍后再整理 |
 
 > 注意：项目副本里的 `global/`、`languages/`、`skills/`、`personal/` 是规则库的**拷贝**，在项目里改不会同步回规则库。跨项目通用的沉淀请去规则库本体改，再 `update.sh` 刷副本；项目专属内容写在 `.vibe-rules/project/README.md`，它属于项目，不会被覆盖。
+
+## 让项目 CI 帮你盯住副本（可选）
+
+副本模式的坑只有一个：**规则在项目里躺久了会漂**。有人手改 `.vibe-rules/` 里的规则（下次 `update` 会被刷掉，白改），
+或者规则库升级了、项目里的副本没跟上（agent 读到的是过期的）。这两件事靠人盯不住，交给 CI：
+
+```bash
+scripts/install.sh <项目> --with-ci      # 装的同时生成 .github/workflows/vibe-rules-verify.yml
+```
+
+生成的那个 workflow 干两件事（规则库不在项目里，所以它按你装的规则库地址 + commit 拉一份到临时目录再比对）：
+
+| 步骤 | 脚本 | 拦的是 |
+|---|---|---|
+| 副本漂移 | `scripts/check-copy.sh` | 项目 `.vibe-rules/` 跟规则库**逐文件比对**不一致：手改了副本、副本缺文件、副本多文件 |
+| 接入完整性 | `scripts/verify.sh` | 证据文件、AGENTS.md 引用块、各 agent 入口文件、档位落实 |
+
+几个约定，避免踩坑：
+
+- **钉的是 commit，不是 main**：workflow 里写死你安装时的 commit（`VIBE_RULES_SHA`），规则库自己演进不会突然把项目 CI 弄红。
+  想让它跟着 main 走，把那行改成 `main`（副本一过期 CI 就报红，属预期）；想重新钉，重跑 `install --with-ci` 或 `update --with-ci`。
+- **动手改过那个 workflow 就先备份**：重跑会覆盖（文件里有"由 vibe-rules 生成"的标记，脚本只认这个标记；
+  你自己写的同名文件不会被覆盖）。
+- **规则库是私有仓库**：给这个 job 加 token/权限，或把 `VIBE_RULES_REPO` 换成你 fork 的地址。
+- **只有副本模式有意义**：外链模式的规则库在你本机，CI 里读不到，`--with-ci` 会直接跳过并说明。
+- `uninstall` 会把这个 workflow 一起删掉（只删带标记的那个，你自己的 workflow 不动）。
+
+平时也可以手动查一次（本地跑，不用等 CI）：
+
+```bash
+bash /path/to/vibe-rules/scripts/check-copy.sh /path/to/project   # 漂移就退出码 1
+bash /path/to/vibe-rules/scripts/check-copy.sh /path/to/project --rules-home /path/to/vibe-rules
+```
 
 ## 三种用法：规则库 / 插件 / skill
 
@@ -340,12 +383,27 @@ pwsh tests\smoke.ps1
 它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
 空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
-`--purge-project` 删项目笔记。bash 版目前 93 项断言（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。改完 PR 前必须全绿。
+`--purge-project` 删项目笔记、`scripts/lint.sh` 的三类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
+外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
+`uninstall` 只删自己生成的）。bash 版目前 257 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
+改完 PR 前必须全绿。
+
+另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦三类"已经真出过事"的问题：
+
+```bash
+bash scripts/lint.sh        # 全绿 = 3 通过，0 失败
+```
+
+| 检查 | 拦的是什么 |
+|---|---|
+| ① `$VAR` 后紧跟全角字符 | bash 3.2 会把变量名连后面的字节一起吞掉 → `unbound variable`（写成 `${VAR}` 就没事；只查命名变量，`$1（` 这类位置参数不误报） |
+| ② sh / ps1 配对 | 成对脚本只改了一半（漏了 Windows 侧）；规则库自己的单侧工具写进 `SH_ONLY_TOOLS` 白名单 |
+| ③ 选项对称 | sh 认的 `--flag` 在 ps1 的 `param()` 里没有对应参数（如 `--agents` ↔ `-AgentNums`） |
 
 一条命令全跑（没装 pwsh 会自动跳过 PS 那档，不算漏测）：
 
 ```bash
-bash scripts/preflight.sh    # 打包校验 + 清单同步检查 + bash 冒烟 + pwsh 冒烟
+bash scripts/preflight.sh    # 脚本 lint + 打包校验 + 清单同步检查 + bash 冒烟 + pwsh 冒烟
 ```
 
 想让它在你 `git commit` 前自动跑，装一下 [pre-commit](https://pre-commit.com/) 就行：

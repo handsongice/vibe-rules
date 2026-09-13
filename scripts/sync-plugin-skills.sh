@@ -19,7 +19,7 @@ case "${1:-}" in
     exit 0
     ;;
   "") ;;
-  *) echo "❌ 未知参数：$1（只支持 --check）" >&2; exit 2 ;;
+  *) echo "❌ 未知参数：${1}（只支持 --check）" >&2; exit 2 ;;
 esac
 
 PYTHON="${PYTHON:-python3}"

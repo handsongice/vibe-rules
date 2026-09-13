@@ -6,6 +6,7 @@
 # 覆盖 install/verify/uninstall/new-project/update 的：
 #   自包含副本模式（默认）、外链模式（-Link）、引用块注入、幂等、旧模板迁移、
 #   -Copy 复制模式、-NoPersonal、-Profile 策略档位、项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
+#   另有 CI 接入 -WithCi（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）。
 #
 # 说明：bash 版（tests/smoke.sh）另覆盖 migrate、带空格路径、bash 3.2 回归，两边互补。
 
@@ -261,6 +262,12 @@ try {
     Check "pre-commit 挂了 validate-package" { (Raw (Join-Path $R1 ".pre-commit-config.yaml")).Contains("scripts/validate-package.sh") }
     Check "preflight.sh 存在" { Test-Path (Join-Path $R1 "scripts/preflight.sh") }
     Check "preflight 里挂了 pwsh 冒烟" { (Raw (Join-Path $R1 "scripts/preflight.sh")).Contains("smoke.ps1") }
+    Check "lint.sh 存在" { Test-Path (Join-Path $R1 "scripts/lint.sh") }
+    Check "pre-commit 挂了 lint" { (Raw (Join-Path $R1 ".pre-commit-config.yaml")).Contains("scripts/lint.sh") }
+    Check "preflight 里挂了 lint" { (Raw (Join-Path $R1 "scripts/preflight.sh")).Contains("scripts/lint.sh") }
+    Check "CI 里挂了 lint（bash 与 macOS 3.2 两处）" {
+        ((Raw (Join-Path $R1 ".github/workflows/smoke.yml")) -split "scripts/lint.sh").Count -eq 3
+    }
     Check "插件版本与 VERSION 一致" {
         $v = (Raw (Join-Path $R1 "VERSION")).Trim()
         $manifest = Get-Content -LiteralPath (Join-Path $R1 ".codex-plugin/plugin.json") -Raw | ConvertFrom-Json
@@ -381,6 +388,73 @@ try {
     Check "uninstall -PurgeProject 退出码 0" { $code -eq 0 }
     Refute "-PurgeProject 删掉项目笔记目录" { Test-Path (Join-Path $P1 ".vibe-rules") }
     Refute "-PurgeProject 删净副本（无残留垃圾）" { Test-Path (Join-Path $P1 ".vibe-rules/ModuleAnalysisCache-stale") }
+
+    Write-Host "== 15. CI 接入（-WithCi） =="
+    $CI  = Join-Path $TmpRoot "proj-withci"
+    $CIL = Join-Path $TmpRoot "proj-withci-link"
+    New-Item -ItemType Directory -Path $CI, $CIL -Force | Out-Null
+    $code = Run-Script $Install @($CI, "-AgentNums", "1", "-Yes", "-WithCi")
+    Check "install -WithCi 退出码 0" { $code -eq 0 }
+    $CIYml = Join-Path $CI ".github/workflows/vibe-rules-verify.yml"
+    Check "生成了 CI workflow" { Test-Path $CIYml }
+    Check "占位符已全部替换（无 @VIBE_REPO@ / @VIBE_SHA@）" {
+        $t = Raw $CIYml
+        (-not $t.Contains("@VIBE_REPO@")) -and (-not $t.Contains("@VIBE_SHA@"))
+    }
+    Check "workflow 调 check-copy.sh（副本漂移）" { (Raw $CIYml).Contains("check-copy.sh") }
+    Check "workflow 调 verify.sh（接入完整性）" { (Raw $CIYml).Contains("verify.sh") }
+    Check "副本不带规则库自己的 pre-commit" { -not (Test-Path (Join-Path $CI ".vibe-rules/.pre-commit-config.yaml")) }
+    Check "副本不带 RELEASE-NOTES.md" { -not (Test-Path (Join-Path $CI ".vibe-rules/RELEASE-NOTES.md")) }
+    Check "带 CI 的副本仍能 verify" { (Run-Script $Verify @($CI)) -eq 0 }
+
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        # 有 git 的规则库副本：git@ 地址转 https、SHA 钉成 40 位 commit
+        $R1G = Join-Path $TmpRoot "rules-git"
+        New-Item -ItemType Directory -Path $R1G -Force | Out-Null
+        Get-ChildItem -Path $R1 -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $R1G -Recurse -Force }
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"   # git 的 stderr 在 Stop 下会变成终止错误
+        & git -C $R1G init -q . 2>$null
+        & git -C $R1G remote add origin git@github.com:handsongice/vibe-rules.git 2>$null
+        & git -C $R1G add -A 2>$null
+        & git -C $R1G -c user.email=smoke@example.com -c user.name=smoke commit -qm init 2>$null
+        $ErrorActionPreference = $prevEap
+        $CIG = Join-Path $TmpRoot "proj-withci-git"
+        New-Item -ItemType Directory -Path $CIG -Force | Out-Null
+        $code = Run-Script (Join-Path $R1G "scripts/install.ps1") @($CIG, "-AgentNums", "1", "-Yes", "-WithCi")
+        Check "有 git 的规则库：install -WithCi 退出码 0" { $code -eq 0 }
+        $CIGYml = Join-Path $CIG ".github/workflows/vibe-rules-verify.yml"
+        Check "git@ 远端地址转成 https" { (Raw $CIGYml).Contains("VIBE_RULES_REPO: https://github.com/handsongice/vibe-rules.git") }
+        Check "SHA 钉成 40 位 commit" { (Raw $CIGYml) -match 'VIBE_RULES_SHA: [0-9a-f]{40}' }
+    } else {
+        Ok "跳过 git 相关 CI 断言（本机没有 git）"
+    }
+
+    # 用户自己的同名 workflow：不许覆盖
+    Write-Text $CIYml "# 我自己的`nname: mine`n"
+    $out = Run-ScriptOut $Install @($CI, "-AgentNums", "1", "-Yes", "-WithCi")
+    Check "同名用户 workflow 保留不动" { (Raw $CIYml).Contains("name: mine") }
+    Check "并打印保留提示" { $out.Contains("保留不动") }
+
+    # 我们的文件：update -WithCi 重新钉 commit
+    Remove-Item $CIYml -Force
+    Run-Script $Install @($CI, "-AgentNums", "1", "-Yes", "-WithCi") | Out-Null
+    Write-Text $CIYml ((Raw $CIYml).Replace("VIBE_RULES_SHA: main", "VIBE_RULES_SHA: 0000000000000000000000000000000000000000"))
+    $code = Run-Script $Update @($CI, "-WithCi", "-Yes")
+    Check "update -WithCi 退出码 0" { $code -eq 0 }
+    Refute "SHA 已刷新（不再是 0000…）" { (Raw $CIYml).Contains("VIBE_RULES_SHA: 0000") }
+
+    # 外链模式不生成 CI（规则库在本机，CI 跑不了）
+    $out = Run-ScriptOut $Install @($CIL, "-Link", "-AgentNums", "1", "-Yes", "-WithCi")
+    Refute "外链模式不生成 CI workflow" { Test-Path (Join-Path $CIL ".github/workflows/vibe-rules-verify.yml") }
+    Check "外链模式说明为什么跳过" { $out.Contains("CI 里读不到") }
+
+    # uninstall：只删本工具生成的，用户自己的 workflow 一律不动
+    Write-Text (Join-Path $CI ".github/workflows/keep.yml") "# 别动我`nname: keepme`n"
+    $code = Run-Script $Uninst @($CI)
+    Check "uninstall 退出码 0" { $code -eq 0 }
+    Refute "uninstall 删掉本工具生成的 workflow" { Test-Path $CIYml }
+    Check "uninstall 保留用户自己的 workflow" { Test-Path (Join-Path $CI ".github/workflows/keep.yml") }
 }
 finally {
     Remove-Item -LiteralPath $TmpRoot -Recurse -Force -ErrorAction SilentlyContinue
