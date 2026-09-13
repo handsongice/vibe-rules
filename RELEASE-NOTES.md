@@ -3,6 +3,51 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.2.0 — 2026-09-13
+
+一句话：**多了个"中间档"（规则进仓库、个人偏好不进仓库），以及一条命令管 spec/plan 的状态与过期。**
+
+### 三个档位怎么选
+
+| 你的情况 | 命令 |
+|---|---|
+| 团队项目 / 云端 agent / CI 都要读规则，个人偏好也想接上 | `scripts/install.sh <项目> --profile hybrid`（新） |
+| 团队项目，个人偏好不带进仓库 | `scripts/install.sh <项目> --profile team` |
+| 只有自己用，规则不进仓库 | `scripts/install.sh <项目> --profile personal` |
+
+- `hybrid`：规则副本仍然进项目 `.vibe-rules/`、跟着仓库走（队友 clone 下来就能用）；
+  **`personal/` 不进仓库**——AGENTS.md 第 3 条写的是你本机规则库的绝对路径，只有你这台机器读得到。
+  取舍：换机器 / 换同事，个人偏好不会跟着走；想跟着走就用不带 `--profile` 的默认装法（副本含 `personal/`，自己注意别提交）。
+- 档位和 `--link`、`--no-personal` 冲突时会直接报错（比如 `--profile hybrid --link` 是自相矛盾的）。
+- 档位记在证据文件里，`update.sh` 自动沿用，`verify.sh` 按档位体检。
+
+### spec / plan 的时效管理
+
+每份设计文档、实现计划，在**文件开头（标题下面一行）**写一行状态：
+
+```markdown
+> status: active · updated: 2026-09-13
+```
+
+`status` 四选一：`draft`（还在讨论，别照着做）/ `active`（在做）/ `done`（做完了，不用重读全文）/ `abandoned`（放弃了，写清为什么）。
+`done` 和 `abandoned` 的文档，下一个 agent 直接跳过——这就是状态行的意义。
+
+配套脚本在**规则库**里（不在项目副本里，副本只带规则本体）：
+
+```bash
+bash <vibe-rules>/scripts/docs-status.sh .              # 汇总：谁在写、谁做完了、多久没动
+bash <vibe-rules>/scripts/docs-status.sh . --stale 30   # 列出超 30 天没更新且还没完成的
+bash <vibe-rules>/scripts/docs-status.sh . --check      # 缺状态行就报错退出（可挂 CI）
+bash <vibe-rules>/scripts/docs-status.sh . --archive    # 把 done/abandoned 移进同级 archive/（git 仓库走 git mv）
+```
+
+新装的项目，`docs/specs/README.md`、`docs/plans/README.md` 里已经写好了这份约定和模板；
+老项目重跑一次 `install` 也会把 `AGENTS.md` 引用块第 7 条刷新成带状态行的版本。
+
+### 破坏性变更
+
+**没有。** 都是新增：不问就不用。老项目重跑 `install` / `update` 只会刷新引用块，不动你的正文和既有文档。
+
 ## 1.1.0 — 2026-09-13
 
 一句话：**"规则进不进仓库、个人层带不带"这件事，以前写在 README 里靠自觉，现在由脚本帮你把关。**

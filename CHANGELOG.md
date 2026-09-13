@@ -5,6 +5,38 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-13
+
+主题：**补上"中间档"和文档的时效管理**——"规则要进仓库、个人偏好不进仓库"有档位可选；
+spec / plan 不再越堆越多，谁在写、多久没动、能不能归档，一条命令看清。
+
+### 新增
+
+- **`--profile hybrid` 混合档**（PowerShell：`-Profile hybrid`）——副本进仓库，但 `personal/` 走本机外链：
+  - 装法仍是自包含副本（`mode=embedded`），但安装时排除 `personal/`，AGENTS.md 第 3 条指向本机规则库的绝对路径
+  - 与 `--link`（要外链就整个外链）、`--no-personal`（混合档就是要接上个人层）冲突时直接报错退出
+  - 装完照旧自查 `.gitignore`；`verify.sh` / `verify.ps1` 按档位校验"副本能进仓库 + 副本无 `personal/` +
+    本机规则库有 `personal/` + 引用块第 3 条指向本机路径"
+- **`scripts/docs-status.sh`**——文档时效管理（工具在规则库里，不随副本进项目）：
+  - 汇总 `docs/specs/`、`docs/plans/` 每份文档的状态行、更新日期与天数；`--stale N` 列出超 N 天没动且没完成的
+  - `--check`：有文档缺状态行就退出 1（可挂 CI / 提交前检查）；`--archive`：把 `done` / `abandoned` 移进同目录 `archive/`
+    （git 仓库里走 `git mv`，保留历史；重名自动加时间戳）
+  - 状态行约定：`> status: draft|active|done|abandoned · updated: YYYY-MM-DD`，写在文件开头（标题下面一行），
+    没写 `updated` 时按文件修改时间算
+
+### 变更
+
+- `install.sh` / `install.ps1`：`--profile` 取值扩到 `team|hybrid|personal`；团队档 / 混合档的 `.gitignore`
+  提醒改用中文档位名（团队档提醒 / 混合档提醒）
+- `templates/DOCS-SPECS.md` / `templates/DOCS-PLANS.md`：新增「状态行」章节（状态含义表 + 状态流转 + docs-status.sh 用法），
+  结构模板头部补状态行；`templates/ENTRY.md` 与 AGENTS.md 引用块第 7 条同步写入约定
+- `skills/brainstorming`、`skills/writing-plans`：写 spec/plan 时带上状态行，流转时改状态（draft → active → done）
+- `README.md`：档位表补 `hybrid` 行与取舍说明、补 `docs-status.sh` 四条用法、日常沉淀表标注状态行
+
+### 升级注意（行为变化）
+
+- 都是新增：不传 `--profile hybrid`、不用 `docs-status.sh` 的老项目行为不变；重跑 `install` 只会把引用块第 7 条刷新成带状态行的版本
+
 ## [1.1.0] - 2026-09-13
 
 主题：**把"策略"从文档约定变成脚本强制**，并补上规格驱动的文档位置与提交前自检。
