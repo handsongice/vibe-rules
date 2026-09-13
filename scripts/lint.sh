@@ -4,11 +4,16 @@
 # 用法：
 #   scripts/lint.sh [目录]        # 不传目录就检查本仓库
 #
-# 查三类"已经真出过事"的问题：
+# 查六类"已经真出过事"的问题：
 #   1. $VAR 后紧跟非 ASCII 字符 —— bash 3.2 / 5.x 都会把变量名吞进后续字节（必须写 ${VAR}）
 #      只查命名变量（$1 这类位置参数不会 unbound，但输出仍可能乱，属另一类）；只查 .sh
 #   2. sh / ps1 配对 —— 成对的安装类脚本不能只改一半
-#   3. 选项对称 —— sh 里认识的每个 --flag，ps1 里必须有对应参数（--no-personal ↔ -NoPersonal）
+#   3. 选项对称（双向）—— sh 里认识的每个 --flag，ps1 顶层 param() 必须有对应参数
+#      （--no-personal ↔ -NoPersonal）；ps1 多出来的参数同样要报，ps1 原生约定走白名单
+#   4. skills/*/SKILL.md 的 ## 触发条件 段存在且非空 —— agent 靠它决定什么时候加载
+#      （frontmatter 字段 / 打包契约由 validate-package.sh 查，这里只管内容质量）
+#   5. bash -n 语法 —— 未闭合的引号 / 反引号会被 bash 吞掉半段脚本，肉眼 review 最容易漏
+#   6. README 选项漂移 —— README 里提到、但所有脚本都不认的 --flag（改了选项忘改文档）
 #
 # 退出码：0 = 全过；1 = 有发现。
 
@@ -42,17 +47,48 @@ SH_ONLY_TOOLS="bump-version docs-status preflight sync-plugin-skills validate-pa
 # 避免把注释和 rsync 自己的参数（--exclude=…）当成选项
 sh_flags() {
   {
-    grep -hE '^[[:space:]]*--[a-z][a-z-]*([|].*)?\)' "$1" || true
+    # 放行 -h|--help) 这种带短参的 case 标签（install / update / verify 都这么写）
+    grep -hE '^[[:space:]]*([-][a-zA-Z][|])?--[a-z][a-z-]*([|].*)?\)' "$1" || true
     grep -hE '^[[:space:]]*\*.*--' "$1" || true
     grep -hE '"--[a-z][a-z-]*"' "$1" | grep -vE '^[[:space:]]*#' || true
     # || true：set -e + pipefail 下，没有匹配时 grep 的退出码 1 会直接干掉整个 lint
   } | grep -oE -- '--[a-z][a-z-]*' | sed 's/^--//' | sort -u || true
 }
 
-# ps1 里声明的参数：param() 里 [switch]/[string]/… 后面跟的 $Name
-ps1_params() {
-  grep -oE '\[(switch|string|int|bool)\][[:space:]]*\$[A-Za-z][A-Za-z0-9]*' "$1" \
-    | sed 's/.*\$//' | tr '[:upper:]' '[:lower:]' | sort -u || true   # 同上：param() 为空不能拖垮整个 lint
+# ps1 顶层 param() 块里声明的参数（保留原大小写，报错时给用户看）—— 只认脚本级，
+# 不扫内部小函数的 param()，否则 install.ps1 里 Function X { param([string]$File) } 会误报成脚本选项
+ps1_script_params_raw() {
+  awk '
+    begun == 0 && match($0, /^[[:space:]]*param[[:space:]]*\(/) {
+      begun = 1
+      rest = substr($0, RSTART + RLENGTH)
+      if (rest ~ /\)/) { print rest; exit }   # 单行 param(...)，只取本行
+      next
+    }
+    begun == 1 && $0 ~ /^[[:space:]]*\)[[:space:]]*$/ { exit }
+    begun == 1 { print }
+  ' "$1" \
+    | grep -oE '\[(switch|string|int|bool)\][[:space:]]*\$[A-Za-z][A-Za-z0-9]*' \
+    | sed 's/.*\$//' | sort -u || true   # 同上：没有 param() 不能拖垮整个 lint
+}
+
+# 比对用的小写清单
+ps1_script_params() {
+  ps1_script_params_raw "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+# 反向白名单：ps1 顶层参数里允许 sh 侧没有的（"脚本名:参数"，参数已归一化）
+#   - help / projectroot：sh 版用行内 -h|--help 与位置参数，天生没有对应的 --flag
+#   - update / new-project：sh 版把整串参数原样透传给 install.sh，不自己解析这些选项
+#   - migrate：sh 版收 $1/$2 位置参数，ps1 版用 -SrcSlug / -DstSlug
+ps1_extra_allowed() {
+  case "$1:$2" in
+    *:help|*:projectroot) return 0 ;;
+    update:all|update:agentnums|update:link|update:nopersonal|update:copy|update:withci|update:yes) return 0 ;;
+    new-project:all|new-project:agentnums|new-project:link|new-project:nopersonal|new-project:copy|new-project:yes) return 0 ;;
+    migrate:srcslug|migrate:dstslug) return 0 ;;
+  esac
+  return 1
 }
 
 # 归一化：去掉减号；两边用词不同的个别选项在这里对齐
@@ -117,9 +153,9 @@ for f in "$TARGET"/scripts/*.ps1; do
 done
 if [ "$PAIR_HIT" -eq 0 ]; then ok "成对脚本两边都在（单侧工具：${SH_ONLY_TOOLS}）"; fi
 
-# ---------- ③ 选项对称 ----------
+# ---------- ③ 选项对称（双向） ----------
 echo ""
-echo "③ 选项对称（sh 的 --flag ⊆ ps1 的参数）"
+echo "③ 选项对称（sh 的 --flag ⊆ ps1 顶层参数；ps1 多出的按白名单）"
 OPT_HIT=0
 for f in "$TARGET"/scripts/*.sh; do
   [ -e "$f" ] || continue
@@ -128,20 +164,112 @@ for f in "$TARGET"/scripts/*.sh; do
   ps1="$TARGET/scripts/$base.ps1"
   [ -f "$ps1" ] || continue          # 配对缺失上一条已经报过
   flags="$(sh_flags "$f")"
-  [ -n "$flags" ] || continue
-  params="$(ps1_params "$ps1")"
-  while IFS= read -r flag; do
-    [ -n "$flag" ] || continue
-    want="$(normalize_flag "$flag")"
-    if ! printf '%s\n' "$params" | grep -qx "$want"; then
-      bad "scripts/$base.sh 认 --${flag}，scripts/$base.ps1 里没有对应参数"
-      OPT_HIT=1
-    fi
-  done <<EOF
+  params_raw="$(ps1_script_params_raw "$ps1")"
+  params="$(ps1_script_params "$ps1")"
+  # 归一化后的 sh 清单（--no-personal → nopersonal），反向检查要拿它跟 ps1 参数比
+  flags_norm="$(printf '%s\n' "$flags" | while IFS= read -r x; do [ -n "$x" ] || continue; normalize_flag "$x"; echo; done)"
+  # 正向：sh 认的每个选项，ps1 顶层 param() 必须有
+  if [ -n "$flags" ]; then
+    while IFS= read -r flag; do
+      [ -n "$flag" ] || continue
+      want="$(normalize_flag "$flag")"
+      if ! printf '%s\n' "$params" | grep -qx "$want"; then
+        bad "scripts/$base.sh 认 --${flag}，scripts/$base.ps1 里没有对应参数"
+        OPT_HIT=1
+      fi
+    done <<EOF
 $flags
 EOF
+  fi
+  # 反向：ps1 顶层 param() 多出来的（白名单之外）= 只加了 Windows 侧
+  if [ -n "$params_raw" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      want="$(normalize_flag "$p")"
+      if ! printf '%s\n' "$flags_norm" | grep -qx "$want"; then
+        if ! ps1_extra_allowed "$base" "$want"; then
+          bad "scripts/$base.ps1 有参数 -${p}，sh 侧没有对应 --${p}，也不在白名单（只加了 Windows 侧？）"
+          OPT_HIT=1
+        fi
+      fi
+    done <<EOF
+$params_raw
+EOF
+  fi
 done
-if [ "$OPT_HIT" -eq 0 ]; then ok "sh 侧认的选项在 ps1 侧都有对应参数"; fi
+if [ "$OPT_HIT" -eq 0 ]; then ok "sh / ps1 选项双向对齐（ps1 原生约定走白名单）"; fi
+
+# ---------- ④ SKILL.md 触发条件 ----------
+# frontmatter 字段 / 打包契约归 validate-package.sh；这里查内容质量里最容易漏的"什么时候加载"
+echo ""
+echo "④ SKILL.md 的 ## 触发条件 段（存在且非空）"
+SKILL_HIT=0
+SKILL_COUNT=0
+for f in "$TARGET"/skills/*/SKILL.md; do
+  [ -e "$f" ] || continue
+  SKILL_COUNT=$((SKILL_COUNT+1))
+  rel="${f#"$TARGET"/}"
+  if ! grep -qE '^##[[:space:]]+.*触发条件' "$f"; then
+    bad "$rel 没有 ## 触发条件 段（agent 靠它决定什么时候加载这个 skill）"
+    SKILL_HIT=1
+    continue
+  fi
+  body="$(awk '/^##[[:space:]]+.*触发条件/{inside=1; next} /^##[[:space:]]/{inside=0} inside{print}' "$f" | tr -d '[:space:]')"
+  if [ "${#body}" -lt 10 ]; then
+    bad "$rel 的触发条件段是空的（写清：用户说什么 / 什么任务下加载）"
+    SKILL_HIT=1
+  fi
+done
+if [ "$SKILL_HIT" -eq 0 ]; then
+  if [ "$SKILL_COUNT" -eq 0 ]; then
+    ok "没有 skills/ 目录，跳过（目标不是规则库）"
+  else
+    ok "${SKILL_COUNT} 个 skill 的触发条件都写了"
+  fi
+fi
+
+# ---------- ⑤ bash -n 语法 ----------
+# 未闭合的引号 / 反引号会改掉整个脚本的解析，肉眼 review 很难发现，交给 bash 自己的解析器
+echo ""
+echo "⑤ bash -n 语法检查（引号 / 反引号配对）"
+SYN_HIT=0
+SYN_COUNT=0
+while IFS= read -r f; do
+  SYN_COUNT=$((SYN_COUNT+1))
+  rel="${f#"$TARGET"/}"
+  err="$(bash -n "$f" 2>&1)" || {
+    bad "$rel 语法错误（bash -n 没过——多半是引号 / 反引号没配对）"
+    printf '%s\n' "$err" | sed 's/^/       /'
+    SYN_HIT=1
+  }
+done < <(find "$TARGET" -name '*.sh' -not -path '*/.git/*' -print | sort)
+if [ "$SYN_HIT" -eq 0 ]; then ok "$SYN_COUNT 个 sh 脚本语法通过"; fi
+
+# ---------- ⑥ README 选项漂移 ----------
+# 只查一个方向：README 里写了、但所有脚本都不认的选项（脚本有但文档没写的暂不要求）
+echo ""
+echo "⑥ README 里写的 --flag 都有脚本认"
+README_HIT=0
+if [ -f "$TARGET/README.md" ]; then
+  known=""
+  for f in "$TARGET"/scripts/*.sh; do
+    [ -e "$f" ] || continue
+    known="$known$(sh_flags "$f")"$'\n'
+  done
+  doc_flags="$(grep -oE -- '--[a-z][a-z-]*' "$TARGET/README.md" | sed 's/^--//' | sort -u || true)"
+  while IFS= read -r flag; do
+    [ -n "$flag" ] || continue
+    if ! printf '%s\n' "$known" | grep -qx "$flag"; then
+      bad "README 提到 --${flag}，但没有任何脚本认这个选项（改了选项忘改文档？）"
+      README_HIT=1
+    fi
+  done <<EOF
+$doc_flags
+EOF
+  if [ "$README_HIT" -eq 0 ]; then ok "README 提到的选项脚本都认"; fi
+else
+  ok "没有 README.md，跳过"
+fi
 
 # ---------- 汇总 ----------
 echo ""

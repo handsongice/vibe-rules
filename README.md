@@ -200,7 +200,7 @@ vibe-rules/（你 clone 到的任意路径）
 ├── templates/             # AGENTS.md 模板 + 副本入口指南（ENTRY.md）+ 项目笔记模板 + CI 校验模板（CI-VERIFY.yml）
 ├── tests/                 # 端到端冒烟测试（smoke.sh + smoke.ps1）
 ├── scripts/               # 安装/更新/验证/卸载/迁移脚本（sh + ps1 双份；agent 清单在 agents.conf）
-│   ├── lint.sh            # 规则库自查：bash 3.2 变量坑 / sh-ps1 配对 / 选项对称
+│   ├── lint.sh            # 规则库自查：六类（变量坑 / 配对 / 双向选项 / 触发条件 / 语法 / 文档漂移）
 │   └── check-copy.sh      # 副本漂移检查：项目的 .vibe-rules 与规则库逐文件比对（项目 CI 用）
 ├── .codex-plugin/         # Codex 插件清单（plugin.json）
 ├── .claude-plugin/        # Claude Code 插件清单 + marketplace
@@ -383,22 +383,25 @@ pwsh tests\smoke.ps1
 它会在临时目录里真实地装一遍、重装一遍、搬个家、再卸干净：幂等、已有 AGENTS.md、
 空 AGENTS.md、旧版模板迁移、`--all`、`--copy`、无效编号、带空格路径；还覆盖默认副本模式（`.vibe-rules/` 完整性、
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
-`--purge-project` 删项目笔记、`scripts/lint.sh` 的三类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
+`--purge-project` 删项目笔记、`scripts/lint.sh` 的六类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
 外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
-`uninstall` 只删自己生成的）。bash 版目前 257 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
+`uninstall` 只删自己生成的）。bash 版目前 270 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
 改完 PR 前必须全绿。
 
-另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦三类"已经真出过事"的问题：
+另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦六类"已经真出过事"的问题：
 
 ```bash
-bash scripts/lint.sh        # 全绿 = 3 通过，0 失败
+bash scripts/lint.sh        # 全绿 = 6 通过，0 失败
 ```
 
 | 检查 | 拦的是什么 |
 |---|---|
 | ① `$VAR` 后紧跟全角字符 | bash 3.2 会把变量名连后面的字节一起吞掉 → `unbound variable`（写成 `${VAR}` 就没事；只查命名变量，`$1（` 这类位置参数不误报） |
 | ② sh / ps1 配对 | 成对脚本只改了一半（漏了 Windows 侧）；规则库自己的单侧工具写进 `SH_ONLY_TOOLS` 白名单 |
-| ③ 选项对称 | sh 认的 `--flag` 在 ps1 的 `param()` 里没有对应参数（如 `--agents` ↔ `-AgentNums`） |
+| ③ 选项对称（双向） | sh 认的选项在 ps1 顶层 `param()` 里没有对应参数，或 ps1 多出的参数 sh 侧不认（如 `--agents` ↔ `-AgentNums`）；ps1 原生约定（`-Help`、update 透传项）走白名单 |
+| ④ skill 触发条件 | `skills/*/SKILL.md` 缺 `## 触发条件` 段、或段落为空——agent 靠它决定什么时候加载这个 skill |
+| ⑤ bash -n 语法 | 引号 / 反引号没配对时 bash 会把半段脚本吞掉，肉眼 review 最容易漏；直接调 bash 自己的解析器 |
+| ⑥ README 选项漂移 | README 里写到、但所有脚本都不认的选项（改了选项忘改文档；只查这一个方向） |
 
 一条命令全跑（没装 pwsh 会自动跳过 PS 那档，不算漏测）：
 

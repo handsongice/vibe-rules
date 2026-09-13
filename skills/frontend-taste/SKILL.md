@@ -9,6 +9,9 @@ metadata:
 
 > 来源：leonxlnx/taste-skill（MIT），按中文精简。核心是：LLM 一写前端就长一个样，这个 skill 负责把那些"一眼 AI"的俗套砍掉。
 
+## 触发条件
+用户要做 landing page、作品集、营销页、官网，或让你把已有页面 redesign 得不那么塑料的时候。
+
 ## 0. 先读题，别上来就写
 
 写代码前，先说一句"设计判读"：

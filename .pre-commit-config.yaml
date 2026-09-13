@@ -11,15 +11,9 @@
 repos:
   - repo: local
     hooks:
-      - id: vibe-rules-syntax
-        name: bash -n（shell 脚本语法）
-        entry: bash -c 'for f in scripts/*.sh tests/*.sh; do bash -n "$f" || exit 1; done'
-        language: system
-        pass_filenames: false
-        always_run: true
-
+      # 这里原本还有个独立的 bash -n hook：现已被 lint.sh 的 ⑤ 覆盖（全仓库 *.sh），删掉避免跑两遍
       - id: vibe-rules-lint
-        name: lint（bash 3.2 变量坑 / sh-ps1 配对 / 选项对称）
+        name: lint（变量坑 / 配对 / 选项对称 / 触发条件 / 语法 / README 漂移六类）
         entry: bash scripts/lint.sh
         language: system
         pass_filenames: false

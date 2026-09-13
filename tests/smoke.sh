@@ -20,7 +20,7 @@
 #  14. 插件打包：skill 结构 / 清单一致性 / 版本同步 / pre-commit 与 preflight
 #  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ hybrid（副本进仓库 + personal 本机外链）/ personal（外链不进仓库）+ 冲突拒绝
 #  16. 文档状态管理：docs-status.sh 汇总 / --stale / --check / --archive（含 git 仓库 git mv）
-#  17. 脚本 lint：lint.sh 全绿 + 三类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称）
+#  17. 脚本 lint：lint.sh 全绿 + 六类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称（双向）/ 缺触发条件 / 语法错 / README 漂移）
 #  18. 副本漂移检查 check-copy.sh（一致 / 手改 / 缺文件 / 多文件 / 外链跳过 / 用法错）
 #  19. CI 接入 --with-ci（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）
 
@@ -484,6 +484,58 @@ mkdir -p "$L5/scripts"
 printf '#!/usr/bin/env bash\necho hi\n' > "$L5/scripts/lint.sh"
 printf 'param()\n' > "$L5/scripts/lint.ps1"
 refute "lint 抓到白名单里出现双扩展名" bash "$R2/scripts/lint.sh" "$L5"
+
+# 负例 5：反向不对称——ps1 顶层多出的参数 sh 侧不认，也不在白名单（只加了 Windows 侧）
+L6="$TMP_ROOT/lint-neg5"
+mkdir -p "$L6/scripts"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L6/scripts/opt-both.sh"
+printf 'param(\n  [switch]$Extra\n)\n' > "$L6/scripts/opt-both.ps1"
+refute "lint 抓到 ps1 单侧多出的参数" bash "$R2/scripts/lint.sh" "$L6"
+L6_OUT="$(bash "$R2/scripts/lint.sh" "$L6" 2>&1 || true)"
+check "反向不对称报错含参数名" has "$L6_OUT" "-Extra"
+
+# 正例：ps1 原生约定（-Help）在白名单里，不报（反向检查别矫枉过正）
+L7="$TMP_ROOT/lint-extra-ok"
+mkdir -p "$L7/scripts"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L7/scripts/opt-both.sh"
+printf 'param(\n  [switch]$Help\n)\n' > "$L7/scripts/opt-both.ps1"
+check "lint 放行白名单里的 ps1 原生参数（-Help）" bash "$R2/scripts/lint.sh" "$L7"
+
+# 负例 6：skill 缺 ## 触发条件 段 / 段落为空（agent 靠它决定什么时候加载）
+L8="$TMP_ROOT/lint-neg6"
+mkdir -p "$L8/skills/demo"
+printf '# Demo\n\n## 步骤\n1. echo\n' > "$L8/skills/demo/SKILL.md"
+refute "lint 抓到 skill 缺触发条件段" bash "$R2/scripts/lint.sh" "$L8"
+L8_OUT="$(bash "$R2/scripts/lint.sh" "$L8" 2>&1 || true)"
+check "缺触发条件报错点名 skill" has "$L8_OUT" "skills/demo/SKILL.md"
+check "缺触发条件报错说明原因" has "$L8_OUT" "什么时候加载"
+printf '# Demo\n\n## 触发条件\n\n## 步骤\n1. echo\n' > "$L8/skills/demo/SKILL.md"
+refute "空的触发条件段也算失败" bash "$R2/scripts/lint.sh" "$L8"
+printf '# Demo\n\n## 触发条件\n用户说"来做 X"时加载。\n\n## 步骤\n1. echo\n' > "$L8/skills/demo/SKILL.md"
+check "lint 放行写了触发条件的 skill" bash "$R2/scripts/lint.sh" "$L8"
+
+# 负例 7：未闭合引号（bash -n 直接拒绝，不靠肉眼）
+L9="$TMP_ROOT/lint-neg7"
+mkdir -p "$L9/scripts"
+printf '#!/usr/bin/env bash\necho "没关引号\n' > "$L9/scripts/syn-demo.sh"
+printf 'param()\n' > "$L9/scripts/syn-demo.ps1"
+refute "lint 抓到未闭合引号（bash -n）" bash "$R2/scripts/lint.sh" "$L9"
+L9_OUT="$(bash "$R2/scripts/lint.sh" "$L9" 2>&1 || true)"
+check "语法错误报错点名文件" has "$L9_OUT" "scripts/syn-demo.sh"
+
+# 负例 8：README 提到的选项没有任何脚本认（改了选项忘改文档）
+L10="$TMP_ROOT/lint-neg8"
+mkdir -p "$L10/scripts"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L10/scripts/noop.sh"
+printf 'param()\n' > "$L10/scripts/noop.ps1"
+printf '# 用法\n\n用 --ghost-flag 打开新行为。\n' > "$L10/README.md"
+refute "lint 抓到 README 选项漂移" bash "$R2/scripts/lint.sh" "$L10"
+L10_OUT="$(bash "$R2/scripts/lint.sh" "$L10" 2>&1 || true)"
+check "README 漂移报错含选项名" has "$L10_OUT" "--ghost-flag"
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --demo) echo demo ;;\nesac\n' > "$L10/scripts/noop.sh"
+printf 'param([switch]$Demo)\n' > "$L10/scripts/noop.ps1"
+printf '# 用法\n\n用 --demo 打开。\n' > "$L10/README.md"
+check "lint 放行 README 里脚本认的选项" bash "$R2/scripts/lint.sh" "$L10"
 
 echo "== 18. 副本漂移检查（check-copy.sh） =="
 CC="$TMP_ROOT/proj-checkcopy"

@@ -23,7 +23,7 @@ jobs:
           bash --version | head -n 1
           uname -a
 
-      - name: 脚本 lint（bash 3.2 坑 / sh-ps1 配对 / 选项对称）
+      - name: 脚本 lint（六类：变量坑 / 配对 / 选项对称 / 触发条件 / 语法 / README 漂移）
         run: bash scripts/lint.sh
 
       - name: 打包校验（skill 结构 / 清单一致 / 版本同步）

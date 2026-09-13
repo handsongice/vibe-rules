@@ -58,6 +58,7 @@ metadata:
   description 决定这个 skill 什么时候被选中加载。
 - `metadata.short-description` 是 UI 里显示的一句话，不影响触发判断。
 - 触发条件的正文写在 `SKILL.md` 的「触发条件」一节；不要在 frontmatter 里塞私有语法。
+`scripts/lint.sh` 的 ④ 会检查每个 skill 的 `## 触发条件` 段存在且非空——这是硬要求，不是建议。
 
 ## 现有 skills
 

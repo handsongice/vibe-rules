@@ -17,7 +17,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   exit 0
 fi
 
-echo "== 1/5 脚本 lint（bash 3.2 坑 / sh-ps1 配对 / 选项对称） =="
+echo "== 1/5 脚本 lint（变量坑 / sh-ps1 配对 / 选项对称 / 触发条件 / 语法 / 文档漂移） =="
 bash scripts/lint.sh
 echo ""
 echo "== 2/5 打包校验（skill 结构 + 插件清单 + 版本） =="
