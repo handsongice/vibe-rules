@@ -5,6 +5,33 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-13
+
+主题：**把「文档承诺」和「实际用法」对齐**——README 说 `install / new-project` 参数通用，Windows 侧
+`new-project.ps1` 其实没有 `-Profile` / `-WithCi`（照 README 抄会报「找不到参数」）；README 也没有
+sh ↔ PowerShell 参数对照表，Windows 用户只能猜；两个冒烟断言数字一改测试就漂。
+
+### 修复
+
+- **`new-project.ps1` 补 `-Profile` / `-WithCi`**——sh 侧 `new-project.sh` 是 `"$@"` 透传，一直支持这两个选项；
+  ps1 侧顶层 `param()` 没声明，传了就参数绑定报错。现在两边一致，帮助文本同步
+- **lint ③ 覆盖透传脚本**——`new-project` / `update` 这类把选项原样转给 `install` 的脚本，`sh_flags` 看不见它们认哪些选项；
+  新增 `PASSTHROUGH_TOOLS`：强制校验 ps1 顶层 `param()` 覆盖 `install.sh` 全量选项，漏一个就报（本次就是这么抓出来的）
+
+### 文档
+
+- **README 新增 sh ↔ PowerShell 参数对照表**（`--agents 1,4,7` ↔ `-AgentNums 1,4,7` 这类）+ PowerShell 用法示例；
+  「常用参数」标题从 `install / new-project` 改成 `install / new-project / update`（三个脚本选项确实一致）
+- README 日常操作段点名 `docs-status.sh` 目前只有 sh 版（Windows 走 Git Bash / WSL），
+  发版示例版本号 `1.1.0` → `1.6.0`
+- **README 断言数字自检**——bash 冒烟 280 项、PS 冒烟 181 项，由两个 smoke 自己核对 README 里写的数字（改断言数量忘了同步 README 直接红）
+
+### 测试
+
+- `tests/smoke.sh` 第 9 节新增 `new-project.sh --profile team` 断言；第 17 节新增 lint 负例：透传脚本 ps1 漏选项必须报错
+- `tests/smoke.ps1` 第 1 节新增 `new-project -Help` 列 `-Profile`；第 11 节新增 `-Profile team -WithCi` 全链路（证据文件 / workflow / verify）
+- bash 3.2 / bash 5 / pwsh 三条路径全绿；`validate-package` 94 项通过
+
 ## [1.5.0] - 2026-09-13
 
 主题：**lint ⑥ 改成双向**——README 写了脚本不认要报（原有），脚本认了 README 从没提也要报（新增）；

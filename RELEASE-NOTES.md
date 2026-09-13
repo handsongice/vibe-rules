@@ -3,6 +3,32 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.6.0 — 2026-09-13
+
+一句话：**Windows 用户照 README 抄命令不会再撞「找不到参数」**——`new-project.ps1` 补上了缺的
+`-Profile` / `-WithCi`，README 也终于有一张 sh ↔ PowerShell 参数对照表了。
+
+### 你需要做什么
+
+- 只想用规则：**什么都不用做**，装机行为跟 1.5.0 一样，规则内容没动
+- **Windows 用户**：如果你在用 `new-project.ps1`，现在可以按 README 传 `-Profile team` / `-WithCi` 了
+  （1.5.0 及以前这两个参数只有 sh 版认，ps1 会报「找不到与参数名匹配的参数」）
+- 自己 fork 了这个库、给 `new-project` / `update` 加过选项：lint 现在会检查这类「透传脚本」的 ps1 侧
+  是否声明了 `install` 的全部选项，漏一个 CI 就红
+
+### 这次修的是什么
+
+README 的「常用参数（install / new-project 通用）」只有一半是真的：`new-project.sh` 靠 `"$@"` 把选项
+原样转给 `install.sh`，所以 sh 侧确实通用；而 `new-project.ps1` 是显式 `param()` 声明，`-Profile` 和
+`-WithCi` 压根不存在——照着 README 抄命令，Windows 用户拿到的是参数绑定错误。
+
+顺带补上两个止血点：
+
+1. **lint ③ 盯住透传脚本**：`new-project` / `update` 把选项转给 `install`，但 `sh_flags` 在脚本里找不到这些选项名，
+   等于检查盲区。现在强制「ps1 顶层 `param()` ⊇ `install.sh` 的全部选项」，这次就是这么抓出缺口的
+2. **README 断言数字自检**：README 里写的「bash 280 项 / PS 181 项」由两个冒烟测试自己核对，
+   以后加断言忘了改 README 会直接红，不再靠人记
+
 ## 1.5.0 — 2026-09-13
 
 一句话：**"文档漂移"检查现在双向查**——README 和脚本选项对不上，哪个方向漏都会被拦在提交前。
