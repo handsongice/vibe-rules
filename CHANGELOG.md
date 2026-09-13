@@ -5,6 +5,30 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-13
+
+主题：**补上 Android 技术栈规范**——`languages/` 此前只有后端三件套（Java / Python / Node.js）
+和前端两个框架（Vue / React），做安卓的（Kotlin + Compose）没有对应规则可读。
+
+### 新增
+
+- **`languages/android.md`**——Kotlin 优先的平台层规范：项目骨架（Kotlin DSL + version catalog、
+  按功能分包）、SDK 与依赖（Compose BOM、minSdk 是产品决策）、代码风格（`sealed interface` 状态、
+  协程/Flow 生命周期、Hilt）、Compose（状态提升、`LazyColumn` key）、数据层（Retrofit / Room / DataStore）、
+  测试（JUnit4 + MockK + Turbine、Compose UI Test）、性能与稳定性（主线程、LeakCanary、Baseline Profile、R8）、
+  权限与兼容（`SDK_INT` 判断、13+ 通知 / 14+ 前台服务 / Scoped Storage）、发布（versionCode、keystore 不进仓库、AAB）、
+  Agent 高频错误 8 条
+- 语言层与 `java.md` 分工：命名/异常/集合/并发跟 Java 篇共用，Android 篇只管平台层的坑，两边不重复
+
+### 文档
+
+- README「它能做什么」技术栈行、目录结构、`languages/` 索引三处补上 `android.md`
+- `global/testing.md` 各栈测试工具补 Android 行（JUnit4 + MockK + `runTest` + Turbine；UI 用 Compose UI Test）
+
+### 测试
+
+- 冒烟断言数量未变：bash 280 / PS 181 项全绿；bash 3.2 同绿；`validate-package` 94 项通过；lint 6 通过
+
 ## [1.6.0] - 2026-09-13
 
 主题：**把「文档承诺」和「实际用法」对齐**——README 说 `install / new-project` 参数通用，Windows 侧

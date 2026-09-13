@@ -3,6 +3,26 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.7.0 — 2026-09-13
+
+一句话：**做安卓的终于有规则可读了**——`languages/` 新增 `android.md`（Kotlin + Compose 平台规范）。
+
+### 你需要做什么
+
+- 只想用规则：**什么都不用做**，`update` 一遍就能拿到 `languages/android.md`；纯新增，**无破坏性变更**
+- 安卓项目：在 `AGENTS.md` 的技术栈清单里加上 `languages/android.md`（既是 Java 又是 Kotlin 的项目，
+  `java.md` 和 `android.md` 两个都读——前者管语言层，后者管平台层）
+
+### 这份 Android 规范写了什么
+
+- **平台骨架**：Kotlin 优先、Gradle Kotlin DSL + version catalog、单模块起步按需拆 `:core` / `:feature`
+- **默认技术栈**：Compose（BOM 统一版本）+ Hilt + Retrofit/OkHttp + kotlinx.serialization + Room + DataStore + Coil
+- **高频崩溃/泄漏/ANR 的防法**：主线程不碰 IO、禁用 `GlobalScope` / `runBlocking`、`collectAsStateWithLifecycle()`、
+  单例不存 Activity、`onDestroyView` 置空 ViewBinding、LeakCanary
+- **版本兼容**：调高版本 API 必须 `SDK_INT` 判断；targetSdk 升级要过 13+ 通知权限 / 14+ `foregroundServiceType` / Scoped Storage
+- **发布纪律**：`versionCode` 单调递增、keystore 与口令不进仓库、上架用 AAB
+- 最后一节是**给 Agent 的高频错误清单**（8 条），比如 Compose 里直接发请求、忘写 `LazyColumn` key、不用 BOM 逐个写死版本
+
 ## 1.6.0 — 2026-09-13
 
 一句话：**Windows 用户照 README 抄命令不会再撞「找不到参数」**——`new-project.ps1` 补上了缺的
