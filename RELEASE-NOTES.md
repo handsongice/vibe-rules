@@ -3,6 +3,56 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.3.0 — 2026-09-13
+
+一句话：**规则副本"漂移"和脚本"改一半"这两类问题，现在提交前就会被拦住。**
+
+### 项目里可以挂一条 CI 了（可选）
+
+```
+scripts/install.sh <项目> --with-ci        # Windows: pwsh scripts\install.ps1 <项目> -WithCi
+```
+
+装完多一个 `.github/workflows/vibe-rules-verify.yml`，PR 上自动查两件事：
+
+1. **副本漂移**：项目 `.vibe-rules/` 里的规则被手改过、少文件、多文件（跟规则库逐文件比对）
+2. **接入完整性**：证据文件、AGENTS.md 引用块、agent 入口文件、档位落实情况
+
+为什么值得开：副本模式唯一的坑就是"规则躺久了会漂"——有人顺手改了副本里的规则，下次 `update` 一刷就白改；
+规则库升级了副本没跟上，agent 读到的是旧规则。这两件事人盯不住，CI 一挂就省心。
+
+几个要知道的点：
+
+- workflow 里**钉的是你安装时的那个 commit**，规则库以后怎么演进都不会突然把你项目 CI 弄红；
+  想跟着 main 走就把它改成 `main`，想重新钉就跑 `update.sh <项目> --with-ci`
+- 规则库是私有仓库的话，给这个 job 加 token/权限，或把 `VIBE_RULES_REPO` 换成你 fork 的地址
+- 你**自己写的**同名文件不会被覆盖（脚本只认自己生成的标记）；`uninstall` 也只删自己生成的那个
+- 外链模式（`--link` / `--profile personal`）不受影响：规则库在你本机，CI 读不到，`--with-ci` 会跳过并说明
+
+不想开 CI 也行，本地随时手动查：
+
+```bash
+bash <vibe-rules>/scripts/check-copy.sh .     # 漂移就退出 1，并点名是哪个文件
+```
+
+### 规则库自己多了个提交前检查
+
+`scripts/lint.sh` 专拦三类"已经真出过事"的问题：bash 3.2 下 `$VAR` 紧跟中文导致的崩、sh/ps1 只改了一半、
+sh 认的选项 ps1 没有。已经挂进 pre-commit、`scripts/preflight.sh` 和仓库自己的 CI——
+你如果 fork 了这个库来改，`bash scripts/preflight.sh` 一条命令全跑。
+
+### 顺带修掉的真 bug
+
+- `update.ps1` 现在支持 `-All` / `-AgentNums` / `-Profile` / `-Yes`（此前只有 sh 版能传，Windows 上想换 agent 名单得重装）
+- 项目副本里不再带规则库自己的 `.pre-commit-config.yaml`：它引用的 `scripts/` 根本不在副本里，
+  装了 pre-commit 的项目会直接报错（老项目重跑一次 `update` 即可清掉）
+
+### 破坏性变更
+
+**没有。** 不传 `--with-ci` 时项目里不会多任何文件；重跑 `install` / `update` 与以前一致。
+唯一算"变化"的是：副本里少了 `.pre-commit-config.yaml` 和 `RELEASE-NOTES.md`（本来就该被排除），
+老项目重跑一次 `update` 会自动清掉它们。
+
 ## 1.2.0 — 2026-09-13
 
 一句话：**多了个"中间档"（规则进仓库、个人偏好不进仓库），以及一条命令管 spec/plan 的状态与过期。**

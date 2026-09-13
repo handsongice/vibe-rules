@@ -5,6 +5,43 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-13
+
+主题：**让"漂移"和"改一半"两类问题在提交前就被拦住**——规则库自身有静态检查（lint），
+项目侧有副本漂移检查，一条 `--with-ci` 就能把后者挂进项目的 PR。
+
+### 新增
+
+- **`scripts/lint.sh`**——规则库自身的静态检查（工具在规则库里，不随副本进项目），查三类"已经真出过事"的问题：
+  - ① `$VAR` 后紧跟非 ASCII 字符：bash 3.2 会把后面的字节一起吞进变量名 → `unbound variable`（要求写 `${VAR}`；
+    只查命名变量，`$1（` 这类位置参数不误报；注释行跳过）
+  - ② sh / ps1 配对：成对脚本不能只改一半（单侧开发工具写进 `SH_ONLY_TOOLS` 白名单，如 `preflight`、`lint`、`check-copy`）
+  - ③ 选项对称：sh 里认识的每个 `--flag`，ps1 的 `param()` 里必须有对应参数（`--agents` ↔ `-AgentNums` 做归一化）
+  - 接线：`.pre-commit-config.yaml`、`scripts/preflight.sh`（现在是 5 步）、`.github/workflows/smoke.yml`（Ubuntu + macOS bash 3.2 两档）
+- **`scripts/check-copy.sh` + `templates/CI-VERIFY.yml` + `install --with-ci`**——项目侧副本漂移检查：
+  - `check-copy.sh`：把项目 `.vibe-rules/` 跟规则库**逐文件比对**（排除 `installed`、`README.md`、`project/`），
+    手改副本、副本缺文件、副本多文件都会退出 1；外链模式（`mode=link`）跳过并说明；支持 `--rules-home`
+  - `install --with-ci`（PS：`-WithCi`）：顺手生成 `.github/workflows/vibe-rules-verify.yml`，PR 上先 `check-copy.sh` 再 `verify.sh`；
+    规则库地址与 commit 在生成时替换进 workflow（`git@github.com:` 会转成 https），只对副本模式有意义
+  - `update --with-ci`：把 workflow 重新钉到当前规则库 commit；`uninstall`（含 PS）按文件里的生成标记删掉它，
+    自己写的同名文件不覆盖、自己写的别的 workflow 不动
+
+### 修复
+
+- **`update.ps1` 补齐 `-All` / `-AgentNums` / `-Profile` / `-Yes`**——此前 `update.sh` 能透传这些给 install，
+  PS 版不能（lint ③ 抓到的真不对称：两边行为会不一样）
+- **`scripts/sync-plugin-skills.sh`**：报错信息里的 `$1（` 在 bash 3.2 下会把后续字节吞进变量名（输出乱码），改成 `${1}`
+- **副本不再带 `.pre-commit-config.yaml` / `RELEASE-NOTES.md`**——此前会把规则库自己的 pre-commit 配置复制进项目副本，
+  而它引用的 `scripts/` 在副本里并不存在，装了 pre-commit 的项目会直接报错；`install` 的排除清单与清理清单同步更新
+- **`scripts/lint.sh` 自身**：`set -e` + `pipefail` 下无匹配的 `grep` 会中断检查（补 `|| true`）；① 命中时只打印不计入失败数
+  （假绿），已补计数
+
+### 变更
+
+- `README.md`：补 lint 三类检查说明表、`--with-ci` / `check-copy.sh` 用法与约定（钉 commit、私有库、重跑覆盖）、
+  目录树补 `check-copy.sh` 与 `templates/CI-VERIFY.yml`、冒烟断言数更新
+- `tests/smoke.sh`（新增第 17/18/19 节）与 `tests/smoke.ps1`（新增第 15 节）：覆盖 lint 负例、副本漂移检测、CI workflow 生成与清理
+
 ## [1.2.0] - 2026-09-13
 
 主题：**补上"中间档"和文档的时效管理**——"规则要进仓库、个人偏好不进仓库"有档位可选；
