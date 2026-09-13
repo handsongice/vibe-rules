@@ -60,7 +60,10 @@ pwsh C:\code\vibe-rules\scripts\new-project.ps1 C:\path\to\new-project
 
 规则库放哪都行，脚本会自动定位。规则库本体更新后（`git -C <规则库> pull`）跑一次 `scripts/update.sh <项目>`，就能把项目里的副本刷到最新，项目专属笔记永不覆盖。
 
-### 常用参数（install / new-project 通用）
+### 常用参数（install / new-project / update 通用）
+
+选项在 `install` / `new-project` / `update` 三个脚本里完全一致；`update` 不显式传就沿用安装时记下的模式和
+agent 选择，不用重新选。Windows 侧是 PowerShell 参数写法，两边对照表在下边。
 
 ```bash
 scripts/install.sh <项目路径> [选项]
@@ -80,6 +83,27 @@ scripts/install.sh <项目路径> [选项]
 ```
 
 不带任何选项时是交互式的：列出 12 个 agent，你输入编号或 `all`。
+
+**sh ↔ PowerShell 参数对照**（同一个意思，两边写法不同）：
+
+| sh（macOS / Linux） | PowerShell（Windows） | 作用 |
+|---|---|---|
+| `--all` | `-All` | 给 12 个 agent 全部建入口 |
+| `--agents 1,4,7` | `-AgentNums 1,4,7` | 只装指定编号的 agent |
+| `--link` | `-Link` | 外链模式：规则本体留本机，项目里只放入口 |
+| `--no-personal` | `-NoPersonal` | 副本里不含 `personal/` |
+| `--profile team` | `-Profile team` | 策略档位：`team` / `hybrid` / `personal` |
+| `--copy` | `-Copy` | 用复制文件代替 symlink |
+| `--with-ci` | `-WithCi` | 顺手生成 CI 校验 workflow |
+| `--yes` | `-Yes` | 非交互 |
+| `--purge-project` | `-PurgeProject` | 卸载时连项目笔记一起删（`uninstall` 专用） |
+| `--help` | `-Help` | 查看参数 |
+
+```powershell
+pwsh C:\code\vibe-rules\scripts\install.ps1 C:\path\to\project -AgentNums 1,4,7 -Yes
+pwsh C:\code\vibe-rules\scripts\update.ps1 C:\path\to\project
+pwsh C:\code\vibe-rules\scripts\uninstall.ps1 C:\path\to\project -PurgeProject
+```
 
 **两种安装模式**：
 
@@ -121,7 +145,7 @@ bash scripts/docs-status.sh /path/to/project --archive    # 把 done/abandoned �
 
 > **升级须知**：老项目如果当初是旧版（外链方式）接入的，重跑新版 `install` 后默认**升级为副本模式**——规则库复制进项目 `.vibe-rules/`、引用块改写为相对路径，旧的 `.vibe-rules` 证据文件会自动替换成 `.vibe-rules/installed`（不会误删你自己的文件：`.vibe-rules` 若不是 vibe-rules 生成的证据文件，install 会拒绝并提示）。想继续保持"规则不进仓库"，重跑时加 `--link`。
 
-装完之后的日常操作（sh / ps1 同名，Windows 用 `update.ps1` 这种写法）：
+装完之后的日常操作（除 `docs-status` 外都是 sh / ps1 同名，Windows 用 `update.ps1` 这种写法）：
 
 ```bash
 scripts/update.sh <项目>      # 规则库更新后刷副本；自动沿用安装时的模式和 agent 选择
@@ -135,6 +159,9 @@ scripts/docs-status.sh <项目> --stale 30 # 超 30 天没更新且没完成的
 scripts/docs-status.sh <项目> --check    # 缺状态行就报错退出（可挂 CI）
 scripts/docs-status.sh <项目> --archive  # 把 done/abandoned 移进 archive/
 ```
+
+> Windows：`update.ps1` / `verify.ps1` / `uninstall.ps1` 跟 sh 版一一对应，参数用 PS 写法（如 `-PurgeProject`，
+> 对照表见上）；`docs-status.sh`（spec / plan 状态）目前只有 sh 版，在 Git Bash / WSL 里跑即可。
 
 只装了 4 个 agent 也没关系：`verify` 只校验你装过的那些，不会拿没装的报错。换机器或挪了规则库，
 重跑一次 install 就会自动刷新路径。
@@ -385,8 +412,8 @@ pwsh tests\smoke.ps1
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
 `--purge-project` 删项目笔记、`scripts/lint.sh` 的六类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
 外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
-`uninstall` 只删自己生成的）。bash 版目前 273 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
-改完 PR 前必须全绿。
+`uninstall` 只删自己生成的）。bash 版目前 280 项断言、PS 版 181 项——**这两个数字由冒烟测试自己核对 README**，
+改断言数量忘了同步 README 会直接红。PS 版覆盖 Windows 侧同类关键路径，改完 PR 前必须全绿。
 
 另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦六类"已经真出过事"的问题：
 
@@ -444,7 +471,7 @@ CI（`.github/workflows/smoke.yml`）会跑三档：
 - **看到好东西**：扔 `inbox/`，定期 review 转正
 - **项目特殊约定**：写到项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式）
 - **加了新 skill**：跑 `scripts/sync-plugin-skills.sh`，让插件清单跟上
-- **发版**：跑 `scripts/bump-version.sh 1.1.0`，同步 `VERSION`、插件清单和 `CHANGELOG.md`，
+- **发版**：跑 `scripts/bump-version.sh 1.6.0`，同步 `VERSION`、插件清单和 `CHANGELOG.md`，
   再往 `RELEASE-NOTES.md` 补一段"使用者视角"的说明（改了啥、要做什么、有没有破坏性变更）
 - **提交前自检**：`bash scripts/preflight.sh`（或装 pre-commit，让它每次提交自动跑）
 - **改了就 commit**

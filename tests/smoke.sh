@@ -23,6 +23,7 @@
 #  17. 脚本 lint：lint.sh 全绿 + 六类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称（双向）/ 缺触发条件 / 语法错 / README 漂移（双向））
 #  18. 副本漂移检查 check-copy.sh（一致 / 手改 / 缺文件 / 多文件 / 外链跳过 / 用法错）
 #  19. CI 接入 --with-ci（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）
+#  20. README 断言数字自检（bash 实测数 = README 写的数，防「加了断言忘改 README」）
 
 set -euo pipefail
 
@@ -220,6 +221,11 @@ check "项目专属笔记建在项目内" test -f "$P5/.vibe-rules/project/READM
 check "笔记含项目名" grep -q 'newproj' "$P5/.vibe-rules/project/README.md"
 check "AGENTS.md 指向项目内笔记" grep -qF '.vibe-rules/project/README.md' "$P5/AGENTS.md"
 check "verify 通过" "$R2/scripts/verify.sh" "$P5"
+
+P5T="$TMP_ROOT/newproj-team"
+check "new-project.sh --profile team 退出码 0" "$R2/scripts/new-project.sh" "$P5T" --agents "2" --profile team --yes
+check "new-project.sh 档位写进证据文件" grep -q '^profile=team$' "$P5T/.vibe-rules/installed"
+check "new-project.sh team 档 verify 通过" "$R2/scripts/verify.sh" "$P5T"
 
 echo "== 10. update =="
 printf '\n我的项目专属决策\n' >> "$P5/.vibe-rules/project/README.md"
@@ -551,6 +557,21 @@ printf 'param([switch]$NoChangelog)\n' > "$L10/scripts/noop.ps1"
 printf '# 用法\n\n没有选项说明。\n' > "$L10/README.md"
 check "lint 放行白名单里的内部选项（--no-changelog）" bash "$R2/scripts/lint.sh" "$L10"
 
+# 负例 10：透传脚本（new-project / update）的 ps1 漏声明 install 选项——Windows 侧少功能
+L11="$TMP_ROOT/lint-neg10"
+mkdir -p "$L11/scripts"
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --link) echo link ;;\n  --foo) echo foo ;;\nesac\n' > "$L11/scripts/install.sh"
+printf 'param(\n  [switch]$Link,\n  [switch]$Foo\n)\n' > "$L11/scripts/install.ps1"
+printf '#!/usr/bin/env bash\necho hi\n' > "$L11/scripts/new-project.sh"
+printf 'param(\n  [switch]$Link\n)\n' > "$L11/scripts/new-project.ps1"
+refute "lint 抓到透传脚本 ps1 漏转发 install 选项" bash "$R2/scripts/lint.sh" "$L11"
+L11_OUT="$(bash "$R2/scripts/lint.sh" "$L11" 2>&1 || true)"
+check "漏转发报错含选项名" has "$L11_OUT" "--foo"
+# 正例：透传脚本把 install 选项声明齐了就不报
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --link) echo link ;;\nesac\n' > "$L11/scripts/install.sh"
+printf 'param(\n  [switch]$Link\n)\n' > "$L11/scripts/install.ps1"
+check "lint 放行声明齐了的透传脚本" bash "$R2/scripts/lint.sh" "$L11"
+
 echo "== 18. 副本漂移检查（check-copy.sh） =="
 CC="$TMP_ROOT/proj-checkcopy"
 mkdir -p "$CC"
@@ -653,6 +674,10 @@ printf '# 别动我\nname: keepme\n' > "$CI/.github/workflows/keep.yml"
 check "uninstall 正常退出" bash "$R2G/scripts/uninstall.sh" "$CI"
 refute "uninstall 删掉本工具生成的 workflow" test -e "$CI_YML"
 check "uninstall 保留用户自己的 workflow" test -f "$CI/.github/workflows/keep.yml"
+
+# 20. README 断言数字自检：本测试的总数（含这一条）必须等于 README 里写的数
+README_BASH_NUM="$(grep -oE 'bash 版目前 [0-9]+ 项断言' "$REPO_ROOT/README.md" | grep -oE '[0-9]+' | head -n 1 || true)"
+check "README 写的 bash 断言数与实测一致" test "$README_BASH_NUM" = "$((PASS+1))"
 
 echo ""
 echo "📊 smoke：$PASS 通过，$FAIL 失败"

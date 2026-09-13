@@ -9,7 +9,9 @@
 #      只查命名变量（$1 这类位置参数不会 unbound，但输出仍可能乱，属另一类）；只查 .sh
 #   2. sh / ps1 配对 —— 成对的安装类脚本不能只改一半
 #   3. 选项对称（双向）—— sh 里认识的每个 --flag，ps1 顶层 param() 必须有对应参数
-#      （--no-personal ↔ -NoPersonal）；ps1 多出来的参数同样要报，ps1 原生约定走白名单
+#      （--no-personal ↔ -NoPersonal）；ps1 多出来的参数同样要报，ps1 原生约定走白名单。
+#      另外：new-project / update 是"原样透传 install 选项"的脚本，ps1 必须覆盖 install.sh
+#      的全部选项——漏一个就是 Windows 侧少个功能（sh 侧 "$@" 转发看不出来）
 #   4. skills/*/SKILL.md 的 ## 触发条件 段存在且非空 —— agent 靠它决定什么时候加载
 #      （frontmatter 字段 / 打包契约由 validate-package.sh 查，这里只管内容质量）
 #   5. bash -n 语法 —— 未闭合的引号 / 反引号会被 bash 吞掉半段脚本，肉眼 review 最容易漏
@@ -41,6 +43,10 @@ bad() { FAIL=$((FAIL+1)); echo "  ❌ $1"; }
 # 只在 sh 一侧做的工具（不是 sh/ps1 成对脚本）：都是规则库自己的开发工具，
 # 不随副本进项目，Windows 上跑不了属预期。往这里加名字 = 显式承认单侧。
 SH_ONLY_TOOLS="bump-version docs-status preflight sync-plugin-skills validate-package lint check-copy"
+
+# "原样透传 install 选项"的脚本：sh 侧用 "$@" 转发，sh_flags 看不到它们的选项，
+# 所以单独校验：ps1 顶层 param() 必须覆盖 install.sh 的每个选项
+PASSTHROUGH_TOOLS="new-project update"
 
 # ---------- 小工具 ----------
 
@@ -88,7 +94,7 @@ ps1_extra_allowed() {
   case "$1:$2" in
     *:help|*:projectroot) return 0 ;;
     update:all|update:agentnums|update:link|update:nopersonal|update:copy|update:withci|update:yes) return 0 ;;
-    new-project:all|new-project:agentnums|new-project:link|new-project:nopersonal|new-project:copy|new-project:yes) return 0 ;;
+    new-project:all|new-project:agentnums|new-project:link|new-project:nopersonal|new-project:profile|new-project:copy|new-project:withci|new-project:yes) return 0 ;;
     migrate:srcslug|migrate:dstslug) return 0 ;;
   esac
   return 1
@@ -167,7 +173,7 @@ if [ "$PAIR_HIT" -eq 0 ]; then ok "成对脚本两边都在（单侧工具：${S
 
 # ---------- ③ 选项对称（双向） ----------
 echo ""
-echo "③ 选项对称（sh 的 --flag ⊆ ps1 顶层参数；ps1 多出的按白名单）"
+echo "③ 选项对称（sh→ps1；ps1 多出按白名单；new-project/update 覆盖 install 全量选项）"
 OPT_HIT=0
 for f in "$TARGET"/scripts/*.sh; do
   [ -e "$f" ] || continue
@@ -208,6 +214,24 @@ EOF
 $params_raw
 EOF
   fi
+  # 透传脚本：ps1 顶层参数必须覆盖 install.sh 的全部选项
+  # （sh 侧用 "$@" 原样转发，sh_flags 看不到选项；漏声明的后果只在 Windows 上炸）
+  case " $PASSTHROUGH_TOOLS " in *" $base "*)
+    if [ -f "$TARGET/scripts/install.sh" ]; then
+      install_flags="$(sh_flags "$TARGET/scripts/install.sh")"
+      while IFS= read -r iflag; do
+        [ -n "$iflag" ] || continue
+        want="$(normalize_flag "$iflag")"
+        if ! printf '%s\n' "$params" | grep -qx "$want"; then
+          bad "scripts/$base.ps1 少了 install.sh --${iflag} 对应的参数（Windows 侧漏转发一个选项）"
+          OPT_HIT=1
+        fi
+      done <<EOF
+$install_flags
+EOF
+    fi
+    ;;
+  esac
 done
 if [ "$OPT_HIT" -eq 0 ]; then ok "sh / ps1 选项双向对齐（ps1 原生约定走白名单）"; fi
 

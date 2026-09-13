@@ -1,16 +1,22 @@
 # new-project.ps1 —— 初始化一个新项目的 vibe-rules 骨架（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\new-project.ps1 <项目路径> [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Copy] [-Yes]
+#   pwsh scripts\new-project.ps1 <项目路径> [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal]
+#                                          [-Profile team|hybrid|personal] [-Copy] [-WithCi] [-Yes]
 #
-# 选项：
+# 选项（与 install.ps1 一致，原样转发）：
 #   -All            给所有 agent 建入口
 #   -AgentNums 1,3  只建指定编号
 #   -Link           外链模式（默认是自包含副本模式）
 #   -NoPersonal     副本不含 personal\
+#   -Profile team   策略档位：team / hybrid / personal（见 README「策略档位」）
 #   -Copy           用复制文件代替 symlink
+#   -WithCi         生成 .github\workflows\vibe-rules-verify.yml（PR 上查副本漂移）
 #   -Yes            非交互
 #   -Help           显示本帮助
+#
+# 例：
+#   pwsh scripts\new-project.ps1 C:\code\new-app -Profile team -AgentNums 1,2 -Yes
 #
 # 做的事：
 #   1. 建项目目录
@@ -24,7 +30,9 @@ param(
     [string]$AgentNums = "",
     [switch]$Link,
     [switch]$NoPersonal,
+    [string]$Profile = "",
     [switch]$Copy,
+    [switch]$WithCi,
     [switch]$Yes
 )
 
@@ -67,7 +75,9 @@ if ($All)        { $installParams["All"]        = $true }
 if ($AgentNums)  { $installParams["AgentNums"]  = $AgentNums }
 if ($Link)       { $installParams["Link"]       = $true }
 if ($NoPersonal) { $installParams["NoPersonal"] = $true }
+if ($Profile)    { $installParams["Profile"]    = $Profile }
 if ($Copy)       { $installParams["Copy"]       = $true }
+if ($WithCi)     { $installParams["WithCi"]     = $true }
 if ($Yes)        { $installParams["Yes"]        = $true }
 & (Join-Path $ScriptDir "install.ps1") @installParams
 

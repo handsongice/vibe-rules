@@ -7,6 +7,7 @@
 #   自包含副本模式（默认）、外链模式（-Link）、引用块注入、幂等、旧模板迁移、
 #   -Copy 复制模式、-NoPersonal、-Profile 策略档位、项目笔记保留、-PurgeProject、-Help、无效编号拒绝。
 #   另有 CI 接入 -WithCi（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）。
+#   末尾还有一条自检：PS 侧实测断言数（含本条）必须等于 README 里写的数。
 #
 # 说明：bash 版（tests/smoke.sh）另覆盖 migrate、带空格路径、bash 3.2 回归，两边互补。
 
@@ -96,6 +97,7 @@ try {
         $code = Run-Script $path @("-Help")
         Check "$name.ps1 -Help 退出码 0" { $code -eq 0 }
     }
+    Check "new-project -Help 列出 -Profile" { (Run-ScriptOut $NewProj @("-Help")).Contains("-Profile") }
 
     Write-Host "== 2. 全新项目安装（默认自包含副本模式） =="
     $P1 = Join-Path $TmpRoot "proj-empty"
@@ -233,6 +235,13 @@ try {
     Check "update 后新规则进副本" { (Raw (Join-Path $P6 ".vibe-rules/global/anti-patterns.md")).Contains("规则库后来加的新章节") }
     Check "update 不覆盖项目笔记" { (Raw (Join-Path $P6 ".vibe-rules/project/README.md")).Contains("我的项目专属决策") }
     Check "update 后 verify 通过" { (Run-Script $Verify @($P6)) -eq 0 }
+
+    $P6T = Join-Path $TmpRoot "newproj-team"
+    $code = Run-Script $NewProj @($P6T, "-AgentNums", "2", "-Profile", "team", "-WithCi", "-Yes")
+    Check "new-project -Profile team -WithCi 退出码 0" { $code -eq 0 }
+    Check "new-project 档位写进证据文件" { (Raw (Join-Path $P6T ".vibe-rules/installed")).Contains("profile=team") }
+    Check "new-project -WithCi 生成 workflow" { Test-Path (Join-Path $P6T ".github/workflows/vibe-rules-verify.yml") }
+    Check "new-project team 档 verify 通过" { (Run-Script $Verify @($P6T)) -eq 0 }
     $code = Run-Script $Update @($P8)
     Check "link 项目 update 保持 link 模式" { $code -eq 0 -and (Raw (Join-Path $P8 ".vibe-rules")).Contains("mode=link") }
 
@@ -459,6 +468,10 @@ try {
 finally {
     Remove-Item -LiteralPath $TmpRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# README 断言数字自检：PS 侧实测数（含本条）必须等于 README 里写的数
+$readmePsNum = [regex]::Match((Get-Content -LiteralPath (Join-Path $RepoRoot "README.md") -Raw), 'PS 版 ([0-9]+) 项')
+Check "README 写的 PS 断言数与实测一致" { $readmePsNum.Success -and ([int]$readmePsNum.Groups[1].Value -eq ($script:Pass + 1)) }
 
 Write-Host ""
 Write-Host "smoke(ps)：$script:Pass 通过，$script:Fail 失败"
