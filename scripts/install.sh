@@ -399,16 +399,17 @@ else
   NOTES_REF="$VIBE_HOME/projects/$SLUG/README.md"
 fi
 # hybrid 档：个人层走本机绝对路径；其余情况个人层跟着规则本体
-if [ -z "$PERSONAL_REF" ]; then
-  PERSONAL_REF="$RULES_REF/personal"
-fi
-
+# 注意顺序：判断「是不是混合档」必须在默认填充之前——填过之后 PERSONAL_REF 恒非空，
+# 默认安装的引用块就会谎称自己是「混合档」（ps1 侧顺序本来就是对的，这次补齐对齐）。
 if [ "$MODE" = "embedded" ] && [ -n "$PERSONAL_REF" ]; then
   BLOCK_INTRO="开始任何工作前，按下面的顺序读（**混合档**：规则副本在项目内、路径相对项目根；第 3 条个人层在本机绝对路径，不存在就跳过）："
 elif [ "$MODE" = "embedded" ]; then
   BLOCK_INTRO="开始任何工作前，按下面的顺序读（**自包含副本**，路径相对项目根，不需要访问项目外的任何文件）："
 else
   BLOCK_INTRO="开始任何工作前，按下面的顺序读（**外链模式**，路径是本机规则库的绝对路径，不存在就跳过）："
+fi
+if [ -z "$PERSONAL_REF" ]; then
+  PERSONAL_REF="$RULES_REF/personal"
 fi
 
 cat > "$TMP_BLOCK" <<EOF

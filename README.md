@@ -412,7 +412,7 @@ pwsh tests\smoke.ps1
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
 `--purge-project` 删项目笔记、`scripts/lint.sh` 的六类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
 外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
-`uninstall` 只删自己生成的）。bash 版目前 280 项断言、PS 版 181 项——**这两个数字由冒烟测试自己核对 README**，
+`uninstall` 只删自己生成的）。bash 版目前 283 项断言、PS 版 184 项——**这两个数字由冒烟测试自己核对 README**，
 改断言数量忘了同步 README 会直接红。PS 版覆盖 Windows 侧同类关键路径，改完 PR 前必须全绿。
 
 另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦六类"已经真出过事"的问题：

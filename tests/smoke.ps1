@@ -109,6 +109,8 @@ try {
     Check "引用块有结束标记" { (Raw $Agents1).Contains("<!-- vibe-rules:end -->") }
     Check "引用块用相对路径（指向项目内副本）" { (Raw $Agents1).Contains(".vibe-rules/README.md") }
     Refute "引用块不含本机绝对路径" { (Raw $Agents1).Contains($R1) }
+    Check "引用块自称自包含副本（默认档不谎称混合档）" { (Raw $Agents1).Contains("**自包含副本**") }
+    Refute "默认档引用块不提混合档" { (Raw $Agents1).Contains("**混合档**") }
     Check "副本入口 README.md 存在" { Test-Path (Join-Path $P1 ".vibe-rules/README.md") }
     Check "副本含 global/iron-rules.md" { Test-Path (Join-Path $P1 ".vibe-rules/global/iron-rules.md") }
     Check "副本含 languages/" { Test-Path (Join-Path $P1 ".vibe-rules/languages") }
@@ -358,6 +360,7 @@ try {
     Refute "hybrid：副本不含 personal\" { Test-Path (Join-Path $PH ".vibe-rules/personal") }
     Check "hybrid：引用块标注个人层本机外链" { (Raw (Join-Path $PH "AGENTS.md")).Contains("本机外链") }
     Check "hybrid：AGENTS.md 第 3 条指向本机 personal\" { (Raw (Join-Path $PH "AGENTS.md")).Contains(((Join-Path $R1 "personal") -replace '\\', '/')) }
+    Check "hybrid：引用块自称混合档" { (Raw (Join-Path $PH "AGENTS.md")).Contains("**混合档**") }
     Check "hybrid：verify 通过" { (Run-Script $Verify @($PH)) -eq 0 }
     $c4 = Run-Script $Install @((Join-Path $TmpRoot "proj-h1"), "-Profile", "hybrid", "-Link", "-Yes")
     Check "-Profile hybrid 与 -Link 冲突被拒绝" { $c4 -ne 0 }

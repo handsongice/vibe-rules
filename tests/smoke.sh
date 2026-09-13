@@ -73,6 +73,8 @@ check "AGENTS.md 生成" test -f "$P1/AGENTS.md"
 check "引用块已注入" grep -q '<!-- vibe-rules:begin' "$P1/AGENTS.md"
 check "引用块用相对路径（指向项目内副本）" grep -qF '.vibe-rules/README.md' "$P1/AGENTS.md"
 refute "引用块不含本机绝对路径" grep -qF "$R1" "$P1/AGENTS.md"
+check "引用块自称自包含副本（默认档不谎称混合档）" grep -qF '**自包含副本**' "$P1/AGENTS.md"
+refute "默认档引用块不提混合档" grep -qF '**混合档**' "$P1/AGENTS.md"
 check "副本入口 README.md 存在" test -f "$P1/.vibe-rules/README.md"
 check "副本含 global/iron-rules.md" test -f "$P1/.vibe-rules/global/iron-rules.md"
 check "副本含 languages/" test -d "$P1/.vibe-rules/languages"
@@ -367,6 +369,7 @@ check "hybrid：副本进仓库（mode=embedded）" grep -q '^mode=embedded$' "$
 refute "hybrid：副本不含 personal/" test -d "$PH/.vibe-rules/personal"
 check "hybrid：引用块标注个人层本机外链" grep -q '本机外链' "$PH/AGENTS.md"
 check "hybrid：AGENTS.md 第 3 条指向本机 personal/" grep -qF "$R2/personal" "$PH/AGENTS.md"
+check "hybrid：引用块自称混合档" grep -qF '**混合档**' "$PH/AGENTS.md"
 check "hybrid：verify 通过" "$R2/scripts/verify.sh" "$PH"
 refute "hybrid 与 --link 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-h1" --profile hybrid --link --yes
 refute "hybrid 与 --no-personal 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-h2" --profile hybrid --no-personal --yes
