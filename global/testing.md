@@ -16,6 +16,7 @@
 
 ## 各栈常用测试工具（详见 languages/）
 - Java: JUnit 5 + Mockito（Spring Boot 用 `@SpringBootTest` 慎用，慢）
+- Android: JUnit4 + MockK + `runTest`；Flow 断言用 Turbine；UI 用 Compose UI Test / Espresso
 - Python: pytest + pytest-cov；mock 用 `unittest.mock`
 - Node/TS: Vitest 优先；React Testing Library；E2E 用 Playwright
 - Vue: Vitest + @vue/test-utils

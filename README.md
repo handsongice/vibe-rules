@@ -18,7 +18,7 @@
 |---|---|
 | **六条铁律** | 不确定就问、改前读懂、改完自验、不擅自重构、不泄露密钥、context 快满先交接 |
 | **四原则** | 想清楚再写、简单优先（含 Ponytail 七步决策梯子）、外科手术式改动、目标驱动 |
-| **技术栈规范** | Java 全家桶 / Python / Node.js / Vue / React 各自的约定 |
+| **技术栈规范** | Java 全家桶 / Android（Kotlin + Compose）/ Python / Node.js / Vue / React 各自的约定 |
 | **10 个可复用 skill** | 需求澄清、写计划、TDD、系统调试、线上排查、code review、commit 前检查、跨会话交接、反 AI 塑料感前端、去 AI 味写作 |
 | **踩坑库** | 每次被 agent 坑过就记一条，新项目开工前扫一眼 |
 | **项目专属层** | 每个项目自己的架构决策和历史坑，和通用规则分开 |
@@ -219,7 +219,7 @@ vibe-rules/（你 clone 到的任意路径）
 │   ├── memory.md         # 跨项目踩坑和经验
 │   └── notes.md          # 随手记
 ├── languages/             # 按技术栈
-│   ├── java.md  python.md  nodejs.md  vue.md  react.md
+│   ├── java.md  android.md  python.md  nodejs.md  vue.md  react.md
 ├── skills/                # 可复用工作流（你自己加的也放这）
 ├── projects/              # 本机项目专属沉淀（new-project 在外链模式下用；默认不提交）
 │   └── <项目名>/          # 每个项目一个目录
@@ -514,7 +514,7 @@ CI（`.github/workflows/smoke.yml`）会跑三档：
 - `anti-patterns.md` —— 踩坑记录
 
 **技术栈（`languages/`）** —— 按项目实际栈读
-- `java.md` / `python.md` / `nodejs.md` / `vue.md` / `react.md`
+- `java.md` / `android.md` / `python.md` / `nodejs.md` / `vue.md` / `react.md`
 
 **Skills（`skills/<name>/SKILL.md`）**
 - `brainstorming/` —— 动手前聊清需求
