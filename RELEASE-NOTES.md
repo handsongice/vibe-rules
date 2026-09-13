@@ -3,6 +3,35 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.8.0 — 2026-09-13
+
+一句话：**多了一个 `0` 号选项**——`--agents 0`（Windows：`-AgentNums 0`）表示「只留根目录
+`AGENTS.md`，别的入口文件一个都不建」，给 Android Studio 这类直接读 `AGENTS.md` 的 AI 助手用。
+
+### 你需要做什么
+
+- **什么都不用做**：不传 0 的老用法行为完全不变（`--all` 只是多记录一条 0 号，不产生文件）
+- **用 Android Studio / 其他只看 `AGENTS.md` 的工具**：装的时候加 `--agents 0` 即可——
+  只写根目录 `AGENTS.md` 引用块 + 规则副本，不产生 `CLAUDE.md` / `.cursorrules` / `.qoder/`
+  这些你根本用不上的文件
+
+```bash
+~/code/vibe-rules/scripts/install.sh ~/AndroidStudioProjects/MyApp --agents 0
+# Windows
+pwsh C:\code\vibe-rules\scripts\install.ps1 C:\path\to\MyApp -AgentNums 0
+```
+
+**已经装过、想把用不上的入口文件清掉**：先 `uninstall.sh <项目>` 再 `install.sh <项目> --agents 0`。
+只改选择（直接重跑 install）不会删掉旧入口文件——uninstall 只删自己生成的那些，不会动你的
+`AGENTS.md` 正文和项目专属笔记。
+
+### 0 号是什么
+
+它不是某个具体工具，而是一条**通用兜底**：`AGENTS.md` 这个约定本身不绑定厂商，凡是「项目根目录的
+`AGENTS.md` 直接读」的工具都能用——Android Studio 的 AI 助手、Zed、以及以后新出的工具。
+编号仍是唯一数据源（`scripts/agents.conf`）里的编号，所以它和 1~12 号可以任意混选，
+`update` / `verify` / `uninstall` 也都认得它。
+
 ## 1.7.1 — 2026-09-13
 
 一句话：**默认安装的项目里，AGENTS.md 不再谎报自己是「混合档」**——规则内容一个字没改，只修了一句

@@ -5,6 +5,33 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-13
+
+主题：**新增 0 号通用项**——给「原生读 `AGENTS.md`、不需要额外入口文件」的工具（Android Studio
+等）一条干净的安装路径：`--agents 0` 只写 `AGENTS.md` 引用块 + 规则副本，一个入口文件都不建。
+
+### 新增
+
+- `scripts/agents.conf`：新增 `0|通用（如 Android Studio）|native|AGENTS.md|https://agents.md`。
+  0 号是 native 型，跟 2 / 8 / 9 / 10 同一类（只认根目录 `AGENTS.md`），区别是它是个**通用兜底**：
+  适合 Android Studio 这类不认 `CLAUDE.md` / `.cursorrules` / `.qoder/` 的新工具，也适合「项目里
+  工具换来换去、只想留一份 `AGENTS.md`」的场景。因为唯一数据源就是 `agents.conf`，
+  `install` / `update` / `verify` / `uninstall` + sh / ps1 两侧**一处都不用改**，`--agents 0` 直接可用
+- `install.sh` / `install.ps1` / `new-project.sh` 帮助文本补 0 号说明与用法示例（`--help` 会打印）
+
+### 测试
+
+- `tests/smoke.sh` / `tests/smoke.ps1` 各加 11 条断言：`--agents 0` 装出来的项目必须有
+  `AGENTS.md` 引用块、证据文件记 `agents=0`、`verify.sh` 通过，且**不得**出现 `CLAUDE.md` /
+  `.cursorrules` / `.cursor` / `.qoder` / `.trae` / `.codebuddy` / `.windsurfrules` /
+  `.github/copilot-instructions.md` 任何一个（「通用」的语义就是真的不建文件，不是少建几个）
+- `--all` 的记录条数断言 12 → 13（0 号也在清单里，但它是 native，不产生文件）
+- 断言数量变化：bash 283 → **294**，PS 184 → **195**（README 里的数字已同步，两个冒烟自带自检）
+
+### 兼容性
+
+- 无破坏性变更。老项目不传 `--agents 0` 行为完全不变（`--all` 多记录一个 0 号，不产生任何文件）
+
 ## [1.7.1] - 2026-09-13
 
 主题：**修掉默认安装的引用块「谎报档位」**——sh 侧 `install.sh` 在判断「是不是混合档」之前就把

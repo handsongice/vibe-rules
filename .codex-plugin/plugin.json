@@ -1,6 +1,6 @@
 {
   "name": "vibe-rules",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "给所有 coding agent 共用的个人开发宪法：铁律、技术栈规范、10 个可复用 skill。",
   "author": {
     "name": "handsongice",
