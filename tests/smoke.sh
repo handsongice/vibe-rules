@@ -20,7 +20,7 @@
 #  14. 插件打包：skill 结构 / 清单一致性 / 版本同步 / pre-commit 与 preflight
 #  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ hybrid（副本进仓库 + personal 本机外链）/ personal（外链不进仓库）+ 冲突拒绝
 #  16. 文档状态管理：docs-status.sh 汇总 / --stale / --check / --archive（含 git 仓库 git mv）
-#  17. 脚本 lint：lint.sh 全绿 + 六类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称（双向）/ 缺触发条件 / 语法错 / README 漂移）
+#  17. 脚本 lint：lint.sh 全绿 + 六类问题各自能报错（变量紧贴非 ASCII / 缺 ps1 / 选项不对称（双向）/ 缺触发条件 / 语法错 / README 漂移（双向））
 #  18. 副本漂移检查 check-copy.sh（一致 / 手改 / 缺文件 / 多文件 / 外链跳过 / 用法错）
 #  19. CI 接入 --with-ci（生成 workflow、占位符替换、钉 commit、不吃用户同名文件、uninstall 只删自己的）
 
@@ -536,6 +536,20 @@ printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --demo) echo demo ;;\nesac\n' >
 printf 'param([switch]$Demo)\n' > "$L10/scripts/noop.ps1"
 printf '# 用法\n\n用 --demo 打开。\n' > "$L10/README.md"
 check "lint 放行 README 里脚本认的选项" bash "$R2/scripts/lint.sh" "$L10"
+
+# 负例 9：反方向——脚本认的选项 README 从没提（加了选项忘写文档）
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --ghost2-flag) echo hi ;;\nesac\n' > "$L10/scripts/noop.sh"
+printf 'param([switch]$Ghost2Flag)\n' > "$L10/scripts/noop.ps1"
+printf '# 用法\n\n没有选项说明。\n' > "$L10/README.md"
+refute "lint 抓到脚本选项没写进 README" bash "$R2/scripts/lint.sh" "$L10"
+L10_OUT="$(bash "$R2/scripts/lint.sh" "$L10" 2>&1 || true)"
+check "反向漂移报错含选项名" has "$L10_OUT" "--ghost2-flag"
+
+# 正例：维护者内部选项（--no-changelog）白名单放行，README 不提也不报
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --no-changelog) echo hi ;;\nesac\n' > "$L10/scripts/noop.sh"
+printf 'param([switch]$NoChangelog)\n' > "$L10/scripts/noop.ps1"
+printf '# 用法\n\n没有选项说明。\n' > "$L10/README.md"
+check "lint 放行白名单里的内部选项（--no-changelog）" bash "$R2/scripts/lint.sh" "$L10"
 
 echo "== 18. 副本漂移检查（check-copy.sh） =="
 CC="$TMP_ROOT/proj-checkcopy"

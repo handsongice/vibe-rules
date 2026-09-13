@@ -13,7 +13,8 @@
 #   4. skills/*/SKILL.md 的 ## 触发条件 段存在且非空 —— agent 靠它决定什么时候加载
 #      （frontmatter 字段 / 打包契约由 validate-package.sh 查，这里只管内容质量）
 #   5. bash -n 语法 —— 未闭合的引号 / 反引号会被 bash 吞掉半段脚本，肉眼 review 最容易漏
-#   6. README 选项漂移 —— README 里提到、但所有脚本都不认的 --flag（改了选项忘改文档）
+#   6. README 选项同步（双向）—— README 提到、但所有脚本都不认的 --flag；反过来脚本认、
+#      README 从没提的也报（维护者内部选项，如 bump-version 的 --no-changelog，走白名单）
 #
 # 退出码：0 = 全过；1 = 有发现。
 
@@ -46,13 +47,15 @@ SH_ONLY_TOOLS="bump-version docs-status preflight sync-plugin-skills validate-pa
 # sh 里认识的 --flag：只看 case 分支标签、case 模式、引号里的字面量，
 # 避免把注释和 rsync 自己的参数（--exclude=…）当成选项
 sh_flags() {
+  # 选项名允许数字（--sha1 / --2fa 这类）：[a-z0-9] 打头、后面 [a-z0-9-]，
+  # 少写这个数字的话，带数字的选项会被静默漏掉——比误报危险
   {
     # 放行 -h|--help) 这种带短参的 case 标签（install / update / verify 都这么写）
-    grep -hE '^[[:space:]]*([-][a-zA-Z][|])?--[a-z][a-z-]*([|].*)?\)' "$1" || true
+    grep -hE '^[[:space:]]*([-][a-zA-Z][|])?--[a-z0-9][a-z0-9-]*([|].*)?\)' "$1" || true
     grep -hE '^[[:space:]]*\*.*--' "$1" || true
-    grep -hE '"--[a-z][a-z-]*"' "$1" | grep -vE '^[[:space:]]*#' || true
+    grep -hE '"--[a-z0-9][a-z0-9-]*"' "$1" | grep -vE '^[[:space:]]*#' || true
     # || true：set -e + pipefail 下，没有匹配时 grep 的退出码 1 会直接干掉整个 lint
-  } | grep -oE -- '--[a-z][a-z-]*' | sed 's/^--//' | sort -u || true
+  } | grep -oE -- '--[a-z0-9][a-z0-9-]*' | sed 's/^--//' | sort -u || true
 }
 
 # ps1 顶层 param() 块里声明的参数（保留原大小写，报错时给用户看）—— 只认脚本级，
@@ -87,6 +90,15 @@ ps1_extra_allowed() {
     update:all|update:agentnums|update:link|update:nopersonal|update:copy|update:withci|update:yes) return 0 ;;
     new-project:all|new-project:agentnums|new-project:link|new-project:nopersonal|new-project:copy|new-project:yes) return 0 ;;
     migrate:srcslug|migrate:dstslug) return 0 ;;
+  esac
+  return 1
+}
+
+# README 反向检查的白名单：脚本认、但故意不写进 README 的维护者内部选项
+#   no-changelog：bump-version.sh 的发版用法，使用者抄不到这个命令，写进 README 只是噪音
+flag_doc_allowed() {
+  case "$1" in
+    no-changelog) return 0 ;;
   esac
   return 1
 }
@@ -245,10 +257,11 @@ while IFS= read -r f; do
 done < <(find "$TARGET" -name '*.sh' -not -path '*/.git/*' -print | sort)
 if [ "$SYN_HIT" -eq 0 ]; then ok "$SYN_COUNT 个 sh 脚本语法通过"; fi
 
-# ---------- ⑥ README 选项漂移 ----------
-# 只查一个方向：README 里写了、但所有脚本都不认的选项（脚本有但文档没写的暂不要求）
+# ---------- ⑥ README 选项同步（双向） ----------
+# 方向一：README 写了、但没有任何脚本认（改了选项忘改文档）
+# 方向二：脚本认了、README 从没提（加了选项忘写文档；维护者内部选项走白名单）
 echo ""
-echo "⑥ README 里写的 --flag 都有脚本认"
+echo "⑥ README 与脚本选项双向同步"
 README_HIT=0
 if [ -f "$TARGET/README.md" ]; then
   known=""
@@ -256,7 +269,7 @@ if [ -f "$TARGET/README.md" ]; then
     [ -e "$f" ] || continue
     known="$known$(sh_flags "$f")"$'\n'
   done
-  doc_flags="$(grep -oE -- '--[a-z][a-z-]*' "$TARGET/README.md" | sed 's/^--//' | sort -u || true)"
+  doc_flags="$(grep -oE -- '--[a-z0-9][a-z0-9-]*' "$TARGET/README.md" | sed 's/^--//' | sort -u || true)"
   while IFS= read -r flag; do
     [ -n "$flag" ] || continue
     if ! printf '%s\n' "$known" | grep -qx "$flag"; then
@@ -266,7 +279,19 @@ if [ -f "$TARGET/README.md" ]; then
   done <<EOF
 $doc_flags
 EOF
-  if [ "$README_HIT" -eq 0 ]; then ok "README 提到的选项脚本都认"; fi
+  # 反向：脚本认的选项，README 得提（白名单除外）
+  while IFS= read -r flag; do
+    [ -n "$flag" ] || continue
+    if ! LC_ALL=C grep -qE -- "--${flag}([^a-z0-9-]|$)" "$TARGET/README.md"; then
+      if ! flag_doc_allowed "$flag"; then
+        bad "scripts 认 --${flag}，但 README 从没提（加了选项忘写文档？内部选项请进 lint.sh 白名单）"
+        README_HIT=1
+      fi
+    fi
+  done <<EOF
+$known
+EOF
+  if [ "$README_HIT" -eq 0 ]; then ok "README 与脚本选项双向同步"; fi
 else
   ok "没有 README.md，跳过"
 fi

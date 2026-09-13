@@ -385,7 +385,7 @@ pwsh tests\smoke.ps1
 引用块用相对路径）、`--link` 外链模式、`--no-personal`、`update` 刷副本不动项目笔记、`uninstall` 默认保留 /
 `--purge-project` 删项目笔记、`scripts/lint.sh` 的六类问题检测、`check-copy.sh` 的漂移检查（手改 / 缺文件 / 多文件 /
 外链跳过 / 用法错）、`--with-ci` 生成的 workflow（占位符替换、钉 commit、不吃用户同名文件、`update --with-ci` 重钉、
-`uninstall` 只删自己生成的）。bash 版目前 270 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
+`uninstall` 只删自己生成的）。bash 版目前 273 项断言、PS 版 175 项（会随测试增长），PS 版覆盖 Windows 侧同类关键路径。
 改完 PR 前必须全绿。
 
 另外有一步静态检查（`scripts/lint.sh`，已挂进 preflight / pre-commit / CI），专拦六类"已经真出过事"的问题：
@@ -401,7 +401,7 @@ bash scripts/lint.sh        # 全绿 = 6 通过，0 失败
 | ③ 选项对称（双向） | sh 认的选项在 ps1 顶层 `param()` 里没有对应参数，或 ps1 多出的参数 sh 侧不认（如 `--agents` ↔ `-AgentNums`）；ps1 原生约定（`-Help`、update 透传项）走白名单 |
 | ④ skill 触发条件 | `skills/*/SKILL.md` 缺 `## 触发条件` 段、或段落为空——agent 靠它决定什么时候加载这个 skill |
 | ⑤ bash -n 语法 | 引号 / 反引号没配对时 bash 会把半段脚本吞掉，肉眼 review 最容易漏；直接调 bash 自己的解析器 |
-| ⑥ README 选项漂移 | README 里写到、但所有脚本都不认的选项（改了选项忘改文档；只查这一个方向） |
+| ⑥ README 选项同步（双向） | README 写了、脚本不认（改了选项忘改文档）；脚本认、README 没提（加了选项忘写文档；维护者内部选项如 `--no-changelog` 走白名单） |
 
 一条命令全跑（没装 pwsh 会自动跳过 PS 那档，不算漏测）：
 
