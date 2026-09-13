@@ -5,6 +5,37 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-13
+
+主题：**lint 从 3 类扩到 6 类**——"改一半"不再只看 sh/ps1 配对和单向选项，
+还看选项双向、skill 触发条件、bash 语法、README 漂移；5 个缺触发条件的 skill 一并补齐。
+
+### 新增
+
+- **lint ③ 选项对称改成双向**——此前只查"sh 认的 ps1 有没有"，漏掉"只给 Windows 侧加了参数"：
+  - ps1 顶层 `param()` 多出、sh 侧不认的参数同样报；ps1 原生约定走显式白名单
+    （`-Help` / `-ProjectRoot`、update / new-project 原样透传给 install 的选项、migrate 用位置参数）
+  - 只取脚本级 `param()`（install.ps1 里内部函数 `param([string]$File)` 不再误报成脚本选项）
+- **lint ④ skill 触发条件**——`skills/*/SKILL.md` 必须有非空 `## 触发条件` 段：agent 靠它决定什么时候加载；
+  frontmatter 字段 / 打包契约仍归 `validate-package.sh`
+- **lint ⑤ bash -n 语法**——全仓库 `*.sh` 过一遍 bash 自己的解析器：未闭合的引号 / 反引号会把半段脚本吞掉，肉眼 review 最容易漏
+- **lint ⑥ README 选项漂移**——README 里写到、但没有任何脚本认的选项（改了选项忘改文档；只查这一个方向）
+
+### 修复
+
+- **5 个 skill 缺 `## 触发条件` 段**（frontend-taste / plain-writing / systematic-debugging /
+  test-driven-development / writing-plans）——lint ④ 首次上线就抓出来的真问题，这次补齐
+- **反向检查报错保留原大小写**——`scripts/x.ps1 有参数 -Extra`，而不是小写化的 `-extra`
+- **`.pre-commit-config.yaml` 去掉与 lint ⑤ 重复的独立 `bash -n` hook**——不再对同一批脚本跑两遍
+
+### 变更
+
+- `tests/smoke.sh` 第 17 节新增负例：ps1 单侧多参数、缺 / 空触发条件段、未闭合引号、README 选项漂移；
+  正例：白名单 `-Help` 放行、写了触发条件的 skill 放行、README 里脚本认的选项放行。bash 冒烟 270 项断言
+- `scripts/preflight.sh`、`.github/workflows/smoke.yml`、`.pre-commit-config.yaml` 步骤名同步到六类
+- `README.md`：lint 说明表补 ③（双向）/ ④ / ⑤ / ⑥，目录树与断言数更新；
+  `skills/README.md` 写明"触发条件"由 lint 强制，不是可选项
+
 ## [1.3.0] - 2026-09-13
 
 主题：**让"漂移"和"改一半"两类问题在提交前就被拦住**——规则库自身有静态检查（lint），

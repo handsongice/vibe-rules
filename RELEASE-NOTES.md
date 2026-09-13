@@ -3,6 +3,45 @@
 > 这份是给**使用者**看的：这次更新你拿到了什么、需要做什么、有没有破坏性变更。
 > 逐条的技术改动在 [CHANGELOG.md](CHANGELOG.md)；当前版本号在 [VERSION](VERSION)。
 
+## 1.4.0 — 2026-09-13
+
+一句话：**提交前检查从一个方向扩到六个方向**——规则库自己"改一半"越来越难溜进 main；
+装机行为没变，`install / update / verify / uninstall` 的用法跟 1.3.0 完全一样。
+
+### 你需要做什么
+
+- 只想用规则：**什么都不用做**，重新 `update` 一遍拿最新规则即可；本次唯一的使用侧变化是
+  5 个 skill 补了「触发条件」段（见下）
+- 自己 fork 了这个库、往里加 skill：新 lint 要求每个 `skills/<名字>/SKILL.md` 有非空
+  `## 触发条件` 段，缺了 CI 直接红——这正是它想拦的事
+
+### 5 个 skill 补了「触发条件」
+
+`systematic-debugging`、`test-driven-development`、`writing-plans`、`plain-writing`、`frontend-taste`
+以前只有 frontmatter 里的一句话 description，agent 什么时候该加载全靠猜；现在每个都有一节写死：
+
+```
+## 触发条件
+遇到 bug、测试失败、报错、行为和预期不一致时，先加载本 skill 再动手改。
+```
+
+### 规则库自己的检查变严了（3 类 → 6 类）
+
+```
+bash scripts/lint.sh        # 全绿 = 6 通过，0 失败
+```
+
+| 检查 | 拦的是什么 |
+|---|---|
+| ① `$VAR` 后紧跟全角字符 | bash 3.2 会把变量名连后面的字节一起吞掉 → `unbound variable` |
+| ② sh / ps1 配对 | 成对脚本只改了一半（漏了 Windows 侧） |
+| ③ 选项对称（双向，新） | sh → ps1 漏参数、ps1 单侧加参数都会报；ps1 原生约定走白名单 |
+| ④ skill 触发条件（新） | `skills/*/SKILL.md` 缺 `## 触发条件` 段、或段落为空 |
+| ⑤ bash -n 语法（新） | 引号 / 反引号没配对（肉眼看不出，解析器一看就中） |
+| ⑥ README 选项漂移（新） | README 里写了、但没有任何脚本认的选项 |
+
+一条命令全跑：`bash scripts/preflight.sh`。
+
 ## 1.3.0 — 2026-09-13
 
 一句话：**规则副本"漂移"和脚本"改一半"这两类问题，现在提交前就会被拦住。**
