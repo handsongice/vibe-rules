@@ -69,8 +69,8 @@ esac
 
 if [ "$EXPLICIT_OVERRIDE" = false ]; then
   case "$PROFILE_FROM_EVIDENCE" in
-    team|personal)
-      # 档位是装的时候定的策略，更新时原样沿用（team 会顺带带上 --no-personal 的语义）
+    team|hybrid|personal)
+      # 档位是装的时候定的策略，更新时原样沿用（team/hybrid 会顺带带上 --no-personal 的语义）
       set -- "$@" --profile "$PROFILE_FROM_EVIDENCE"
       ;;
     *)

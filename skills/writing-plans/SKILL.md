@@ -16,11 +16,15 @@ metadata:
 ## 计划文件位置
 
 存到项目里 `docs/plans/YYYY-MM-DD-<feature>.md`，commit。
+文件开头放状态行（`> status: draft|active|done|abandoned · updated: YYYY-MM-DD`）：
+开写时 `active`，按计划做完后改 `done`——`done` 的计划下一个 agent 不用重读。
 
 ## 头部必须有
 
 ```markdown
 # <功能名> 实现计划
+
+> status: active · updated: YYYY-MM-DD
 
 **目标**：一句话说清做什么
 **架构**：2-3 句说清做法

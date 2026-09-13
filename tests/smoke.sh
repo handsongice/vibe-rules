@@ -18,7 +18,8 @@
 #  12. migrate：跨项目迁移（含 bash 3.2 重复运行回归）
 #  13. 带空格路径
 #  14. 插件打包：skill 结构 / 清单一致性 / 版本同步 / pre-commit 与 preflight
-#  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ personal（外链不进仓库）+ 冲突拒绝
+#  15. 策略档位 --profile：team（副本进仓库 + 无个人层）/ hybrid（副本进仓库 + personal 本机外链）/ personal（外链不进仓库）+ 冲突拒绝
+#  16. 文档状态管理：docs-status.sh 汇总 / --stale / --check / --archive（含 git 仓库 git mv）
 
 set -euo pipefail
 
@@ -344,12 +345,91 @@ check "覆盖后模式变 embedded" grep -q '^mode=embedded$' "$PP/.vibe-rules/i
 check "覆盖后档位变 team" grep -q '^profile=team$' "$PP/.vibe-rules/installed"
 check "覆盖后 verify 通过" "$R2/scripts/verify.sh" "$PP"
 
+
+# hybrid 档：副本进仓库（不含 personal/），个人层走本机外链
+PH="$TMP_ROOT/proj-hybrid"
+mkdir -p "$PH"
+check "install --profile hybrid" "$R2/scripts/install.sh" "$PH" --profile hybrid --agents "1" --yes
+check "hybrid：证据文件 profile=hybrid" grep -q '^profile=hybrid$' "$PH/.vibe-rules/installed"
+check "hybrid：副本进仓库（mode=embedded）" grep -q '^mode=embedded$' "$PH/.vibe-rules/installed"
+refute "hybrid：副本不含 personal/" test -d "$PH/.vibe-rules/personal"
+check "hybrid：引用块标注个人层本机外链" grep -q '本机外链' "$PH/AGENTS.md"
+check "hybrid：AGENTS.md 第 3 条指向本机 personal/" grep -qF "$R2/personal" "$PH/AGENTS.md"
+check "hybrid：verify 通过" "$R2/scripts/verify.sh" "$PH"
+refute "hybrid 与 --link 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-h1" --profile hybrid --link --yes
+refute "hybrid 与 --no-personal 冲突被拒绝" "$R2/scripts/install.sh" "$TMP_ROOT/proj-h2" --profile hybrid --no-personal --yes
+
+# update 要沿用 hybrid 档（不能刷成默认档把 personal/ 带进副本）
+"$R2/scripts/update.sh" "$PH" >/dev/null 2>&1
+check "hybrid：update 沿用档位（profile=hybrid）" grep -q '^profile=hybrid$' "$PH/.vibe-rules/installed"
+refute "hybrid：update 后仍然不含 personal/" test -d "$PH/.vibe-rules/personal"
+check "hybrid：update 后引用块仍指向本机 personal/" grep -qF "$R2/personal" "$PH/AGENTS.md"
+
+# 混合档同样要求副本能进仓库：.gitignore 排除掉 = 队友/云端读不到
+printf '.vibe-rules/\n' >> "$PH/.gitignore"
+HYB_OUT="$("$R2/scripts/install.sh" "$PH" --profile hybrid --agents "1" --yes 2>&1)"
+check "hybrid：装的时候提醒副本被 .gitignore 排除" has "$HYB_OUT" "混合档提醒"
+refute "hybrid：.gitignore 忽略副本 → verify 报错" "$R2/scripts/verify.sh" "$PH"
+rm -f "$PH/.gitignore"
+
 chmod 644 "$R2/CHANGELOG.md" 2>/dev/null || true
 check "bump-version.sh 可执行" test -x "$R2/scripts/bump-version.sh"
+BADVER_OUT="$(bash "$R2/scripts/bump-version.sh" nope 2>&1 || true)"
+check "bump-version.sh 拒绝非 semver（提示语完整，没被全角括号吃掉变量）" has "$BADVER_OUT" "不是 semver：nope"
 check "bump-version.sh 1.0.1" bash "$R2/scripts/bump-version.sh" 1.0.1
 check "VERSION 已更新" grep -q '^1.0.1$' "$R2/VERSION"
 check "插件清单版本已同步" grep -q '"version": "1.0.1"' "$R2/.codex-plugin/plugin.json"
 check "CHANGELOG 插入新版本段" grep -q '## \[1.0.1\]' "$R2/CHANGELOG.md"
+SAMEVER_OUT="$(bash "$R2/scripts/bump-version.sh" 1.0.1 2>&1)"
+check "bump-version.sh 同版本提示完整" has "$SAMEVER_OUT" "版本没变（仍是 1.0.1）"
+
+echo "== 16. 文档状态管理 docs-status.sh =="
+check "docs-status.sh --help 正常" bash "$R2/scripts/docs-status.sh" --help
+refute "docs-status.sh 未知参数被拒绝" bash "$R2/scripts/docs-status.sh" --nope
+refute "docs-status.sh --stale 非数字被拒绝" bash "$R2/scripts/docs-status.sh" "$TMP_ROOT" --stale abc
+
+DS="$TMP_ROOT/proj-docs-status"
+mkdir -p "$DS/docs/specs" "$DS/docs/plans"
+printf '# 旧规格\n\n> status: done · updated: 2026-01-01\n' > "$DS/docs/specs/2026-01-01-old.md"
+printf '# 活跃计划\n\n> status: active · updated: 2026-01-01\n' > "$DS/docs/plans/2026-01-01-active.md"
+printf '# 无状态行\n' > "$DS/docs/specs/no-status.md"
+printf '# 草稿\n\n> status: draft · updated: 2026-01-01\n' > "$DS/docs/plans/draft.md"
+
+DS_OUT="$(bash "$R2/scripts/docs-status.sh" "$DS" 2>&1)"
+check "汇总：共 4 份文档" has "$DS_OUT" "共 4 份文档"
+check "汇总：已完成 1 份" has "$DS_OUT" "已完成 1"
+check "汇总：未标注状态 1 份" has "$DS_OUT" "未标注状态 1"
+check "汇总：列出 done 文档" has "$DS_OUT" "2026-01-01-old.md"
+check "汇总：默认列过期清单（active 未完成）" has "$DS_OUT" "2026-01-01-active.md"
+refute "--check：有未标注文档时退出 1" bash "$R2/scripts/docs-status.sh" "$DS" --check
+DS_OUT0="$(bash "$R2/scripts/docs-status.sh" "$DS" --stale 0 2>&1)"
+refute "--stale 0 不列过期清单" has "$DS_OUT0" "天没更新、且还没完成"
+
+check "--archive 正常退出" bash "$R2/scripts/docs-status.sh" "$DS" --archive
+check "--archive：done 进 archive/" test -f "$DS/docs/specs/archive/2026-01-01-old.md"
+refute "--archive：原位置清空" test -e "$DS/docs/specs/2026-01-01-old.md"
+check "--archive：不碰没完成的 active 文档" test -e "$DS/docs/plans/2026-01-01-active.md"
+check "--archive：不归档 draft" test -e "$DS/docs/plans/draft.md"
+DS_OUT2="$(bash "$R2/scripts/docs-status.sh" "$DS" 2>&1)"
+check "归档后汇总变 3 份" has "$DS_OUT2" "共 3 份文档"
+
+printf '# 无状态行\n\n> status: active · updated: %s\n' "$(date +%Y-%m-%d)" > "$DS/docs/specs/no-status.md"
+check "--check：状态行补齐后通过" bash "$R2/scripts/docs-status.sh" "$DS" --check
+
+# git 仓库里归档要走 git mv（保留历史），不能当普通文件删
+DSG="$TMP_ROOT/proj-docs-status-git"
+mkdir -p "$DSG/docs/plans"
+printf '# 完成计划\n\n> status: done · updated: 2026-02-02\n' > "$DSG/docs/plans/2026-02-02-done.md"
+(
+  cd "$DSG" || exit 1
+  git init -q .
+  git add -A
+  git -c user.email=smoke@example.com -c user.name=smoke commit -qm init
+) >/dev/null 2>&1
+check "docs-status：git 仓库 --archive 正常" bash "$R2/scripts/docs-status.sh" "$DSG" --archive
+check "docs-status：git 归档文件到位" test -f "$DSG/docs/plans/archive/2026-02-02-done.md"
+check "docs-status：git 里是改名（归档文件仍被跟踪）" bash -c "git -C '$DSG' ls-files --error-unmatch docs/plans/archive/2026-02-02-done.md"
+refute "docs-status：git 原路径已不再跟踪" bash -c "git -C '$DSG' ls-files --error-unmatch docs/plans/2026-02-02-done.md"
 
 echo ""
 echo "📊 smoke：$PASS 通过，$FAIL 失败"

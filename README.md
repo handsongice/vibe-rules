@@ -71,6 +71,7 @@ scripts/install.sh <项目路径> [选项]
                    （默认是自包含副本模式；规则不便进仓库时用）
   --no-personal    副本里不含 personal/（个人偏好与记忆不跟着项目仓库走）
   --profile team     团队档 = 自包含副本 + 不含 personal/ + 自查副本能不能真进仓库
+  --profile hybrid   混合档 = 副本进仓库，但 personal/ 不进仓库、只在本机外链
   --profile personal 个人档 = 外链模式（规则不进仓库），个人层照常带上
   --copy           用复制文件代替 symlink（symlink 被 Windows/Git 限制时用）
   --yes            非交互（不带 --agents 时等价于 --all，CI / 批量接入用）
@@ -91,16 +92,31 @@ scripts/install.sh <项目路径> [选项]
 | 档位 | 装法 | 规则去哪 | 个人层 | 适合 |
 |---|---|---|---|---|
 | `team` | `install.sh <项目> --profile team` | 项目内 `.vibe-rules/`，**跟着仓库提交** | 不带 | 团队协作、云端 agent、CI |
+| `hybrid` | `install.sh <项目> --profile hybrid` | 项目内 `.vibe-rules/`，**跟着仓库提交** | 本机外链（不进仓库） | 团队共享规则、但个人偏好与记忆只留在本机 |
 | `personal` | `install.sh <项目> --profile personal` | 本机规则库（外链），不进仓库 | 带上 | 个人项目、不想公开规则 |
 
 档位会记进证据文件（`profile=`），`update` 自动沿用；`verify` 按档位校验——
-team 档会检查"副本里没有 `personal/`、且没被 `.gitignore` 排除"，personal 档会检查规则没落进项目。
-档位和 `--link` / `--no-personal` 冲突时直接报错，不猜。不传 `--profile` 就还是老样子（按细粒度选项走）。
+team / hybrid 档会检查"副本里没有 `personal/`、且没被 `.gitignore` 排除"（hybrid 还会确认引用块指向本机 personal/），
+personal 档会检查规则没落进项目。档位和 `--link` / `--no-personal` 冲突时直接报错，不猜。
+不传 `--profile` 就还是老样子（按细粒度选项走）。
+
+> hybrid 的取舍：`.vibe-rules/personal/` 不进仓库，引用块里写的是**本机绝对路径**——
+> 队友 clone 下来读不到你的个人偏好（这正是目的），但换个 agent、换台机器也只有你自己那份能读到。
 
 装完项目里还会多出两个目录（**只在不存在时建档，永不覆盖**）：
 
 - `docs/specs/` —— 设计文档（spec）写这里，对应 `brainstorming` skill
 - `docs/plans/` —— 实现计划（plan）写这里，对应 `writing-plans` skill
+
+两份 README 里都写了「状态行」约定：每份文档开头（标题下面一行）`> status: draft|active|done|abandoned · updated: YYYY-MM-DD`。
+`done` 的文档下一个 agent 不用重读全文。汇总 / 找过期 / 归档：
+
+```bash
+bash scripts/docs-status.sh /path/to/project              # 汇总：谁 draft、谁 done、多久没动
+bash scripts/docs-status.sh /path/to/project --stale 30   # 列出超 30 天没更新且没完成的
+bash scripts/docs-status.sh /path/to/project --check      # 有文档缺状态行就报错（可挂 CI）
+bash scripts/docs-status.sh /path/to/project --archive    # 把 done/abandoned 移进 archive/
+```
 
 > **升级须知**：老项目如果当初是旧版（外链方式）接入的，重跑新版 `install` 后默认**升级为副本模式**——规则库复制进项目 `.vibe-rules/`、引用块改写为相对路径，旧的 `.vibe-rules` 证据文件会自动替换成 `.vibe-rules/installed`（不会误删你自己的文件：`.vibe-rules` 若不是 vibe-rules 生成的证据文件，install 会拒绝并提示）。想继续保持"规则不进仓库"，重跑时加 `--link`。
 
@@ -111,6 +127,12 @@ scripts/update.sh <项目>      # 规则库更新后刷副本；自动沿用安�
 scripts/verify.sh <项目>      # 体检：引用块、副本完整性、各 agent 入口
 scripts/uninstall.sh <项目>   # 卸载：删副本和入口文件，保留 AGENTS.md 和项目专属笔记
                               # （要连项目笔记一起删，加 --purge-project）
+
+# spec / plan 的状态与过期（脚本在规则库本体里，不进项目副本）：
+scripts/docs-status.sh <项目>            # 汇总每份文档的状态和天数
+scripts/docs-status.sh <项目> --stale 30 # 超 30 天没更新且没完成的
+scripts/docs-status.sh <项目> --check    # 缺状态行就报错退出（可挂 CI）
+scripts/docs-status.sh <项目> --archive  # 把 done/abandoned 移进 archive/
 ```
 
 只装了 4 个 agent 也没关系：`verify` 只校验你装过的那些，不会拿没装的报错。换机器或挪了规则库，
@@ -208,8 +230,8 @@ your-project/
 | 个人开发偏好 | `personal/preferences.md` | "函数名用动词开头" |
 | 新项目或新发现的工作流 | `skills/` | "code-review 流程" |
 | 某个项目特有的坑 | 项目内 `.vibe-rules/project/README.md`（副本模式）或 `projects/<项目名>/`（外链模式） | "这个项目的缓存策略" |
-| 设计文档（spec） | 项目内 `docs/specs/YYYY-MM-DD-<topic>.md` | "支付回调重试的设计取舍" |
-| 实现计划（plan） | 项目内 `docs/plans/YYYY-MM-DD-<feature>.md` | "把 X 拆成 5 个任务" |
+| 设计文档（spec） | 项目内 `docs/specs/YYYY-MM-DD-<topic>.md`（文件开头写状态行） | "支付回调重试的设计取舍" |
+| 实现计划（plan） | 项目内 `docs/plans/YYYY-MM-DD-<feature>.md`（文件开头写状态行） | "把 X 拆成 5 个任务" |
 | 还没想好归哪 | `inbox/` | 稍后再整理 |
 
 > 注意：项目副本里的 `global/`、`languages/`、`skills/`、`personal/` 是规则库的**拷贝**，在项目里改不会同步回规则库。跨项目通用的沉淀请去规则库本体改，再 `update.sh` 刷副本；项目专属内容写在 `.vibe-rules/project/README.md`，它属于项目，不会被覆盖。

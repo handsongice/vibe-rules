@@ -70,10 +70,10 @@ metadata:
 2. 一次一个问题：目的、约束、成功标准
 3. 提 2-3 个方案，带 trade-off 和你的推荐
 4. 分段给设计，每段问"这部分对吗"
-5. 写 spec 到 `docs/specs/YYYY-MM-DD-<topic>.md` 并 commit
+5. 写 spec 到 `docs/specs/YYYY-MM-DD-<topic>.md` 并 commit（文件开头放状态行：`> status: draft|active|done|abandoned · updated: YYYY-MM-DD`）
 6. spec 自审：占位符扫一遍、前后一致、范围是否过大、有没有歧义——发现就修
 7. 让用户 review spec
-8. 批准后，进入 `writing-plans` skill
+8. 批准后，进入 `writing-plans` skill（spec 状态改 `active`；实现完成、`docs-status.sh` 确认后改 `done`）
 
 ## 设计的两个原则
 

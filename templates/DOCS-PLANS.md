@@ -17,10 +17,36 @@ docs/plans/YYYY-MM-DD-<feature>.md
 
 commit。计划要能被一个**不了解这个代码库**的执行者照着做完。
 
+## 状态行（写在文件开头）
+
+```markdown
+> status: active · updated: 2026-09-13
+```
+
+| status | 意思 |
+|---|---|
+| `draft` | 还在讨论，**别照着做** |
+| `active` | 正在做 / 准备做 |
+| `done` | 已实现（文件末尾补一行「实现见 <commit/PR>」） |
+| `abandoned` | 放弃（补一句为什么，省得下个人再试一遍） |
+
+状态行是给下一个 agent（和三个月后的你）看的路标：**`done` 的文档不用重读全文**，
+直接看实现就行；`active` 很长时间没动，就该重新评估。改状态时顺手把 `updated` 也改掉。
+
+查状态 / 找过期文档 / 归档已完成（脚本在 vibe-rules 规则库里，不在项目副本里）：
+
+```bash
+bash <vibe-rules>/scripts/docs-status.sh .              # 汇总
+bash <vibe-rules>/scripts/docs-status.sh . --stale 30   # 列出超 30 天没动且没完成的
+bash <vibe-rules>/scripts/docs-status.sh . --archive    # 把 done/abandoned 移进 archive/
+```
+
 ## 结构
 
 ```markdown
 # <功能名> 实现计划
+
+> status: draft · updated: YYYY-MM-DD
 
 **目标**：一句话
 **架构**：2-3 句

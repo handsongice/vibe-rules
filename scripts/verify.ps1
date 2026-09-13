@@ -103,6 +103,7 @@ if ($mode -eq "embedded") {
     else { Warn "缺少 .vibe-rules\project\README.md（重跑 install.ps1 会建档，且不会覆盖已有内容）" }
 
     if (Test-Path ".vibe-rules\personal\preferences.md") { Ok "副本含 personal\（个人偏好与记忆）" }
+    elseif ($profile -eq "hybrid") { Ok "副本不含 personal\（混合档：个人层走本机外链，符合预期）" }
     else { Warn "副本不含 personal\（安装时用了 -NoPersonal，属正常）" }
 } else {
     if ($rulesHome -and (Test-Path $rulesHome)) { Ok "规则库路径有效：$rulesHome" }
@@ -142,6 +143,36 @@ switch ($profile) {
             Ok "团队档：.vibe-rules\ 没有被 .gitignore 排除"
         }
     }
+    "hybrid" {
+        Ok "策略档位：hybrid（副本进仓库 + personal 本机外链）"
+        if ($mode -ne "embedded") {
+            Bad "混合档要求自包含副本模式，实际是 $mode（重跑 install.ps1 -Profile hybrid）"
+        }
+        if (Test-Path ".vibe-rules\personal") {
+            Bad "混合档副本里不该有 personal\（个人偏好会跟着进仓库；重跑 install.ps1 -Profile hybrid）"
+        } else {
+            Ok "混合档：副本不含 personal\"
+        }
+        if ($ignoresVibe) {
+            Bad "混合档：.gitignore 忽略了 .vibe-rules\，副本进不了仓库（队友/云端/CI 读不到）"
+        } else {
+            Ok "混合档：.vibe-rules\ 没有被 .gitignore 排除"
+        }
+        $personalDir = Join-Path $rulesHome "personal"
+        if ($rulesHome -and (Test-Path $personalDir)) {
+            Ok "混合档：本机个人层存在（$personalDir）"
+        } else {
+            Warn "混合档：本机规则库里没有 personal\（换台机器就读不到个人偏好）"
+        }
+        $personalRef = ($personalDir -replace '\\', '/')
+        $agentsText = ""
+        if (Test-Path "AGENTS.md") { $agentsText = Get-Content "AGENTS.md" -Raw }
+        if ($personalRef -and $agentsText.Contains($personalRef)) {
+            Ok "混合档：AGENTS.md 第 3 条指向本机 personal\"
+        } else {
+            Bad "混合档：AGENTS.md 没指向本机 personal\（重跑 install.ps1 -Profile hybrid）"
+        }
+    }
     "personal" {
         Ok "策略档位：personal（个人自用）"
         if ($mode -ne "link") {
@@ -153,7 +184,7 @@ switch ($profile) {
             Ok "个人档：.vibe-rules 已被 .gitignore 忽略"
         }
     }
-    default { Bad "证据文件 profile 值无效：$profile（应为 team / personal / default）" }
+    default { Bad "证据文件 profile 值无效：$profile（应为 team / hybrid / personal / default）" }
 }
 
 # 项目文档约定（规格驱动）：副本模式下由 install 建档

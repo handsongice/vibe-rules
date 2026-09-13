@@ -11,6 +11,7 @@
 #                    （合规敏感、规则不便进仓库时用；默认是自包含副本模式）
 #   --no-personal    副本里不含 personal/（个人偏好与记忆不进项目仓库）
 #   --profile team     团队档：强制自包含副本 + 不含 personal/，并要求副本真的能进仓库
+#   --profile hybrid   混合档：副本进仓库，但 personal/ 不进仓库、只在本机外链
 #   --profile personal 个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   --copy           入口用真实文件复制代替 symlink（云端 agent / 无 symlink 环境）
 #   --yes            非交互模式（配合 --all / --agents）
@@ -42,6 +43,7 @@ ASSUME_YES=false
 LINK_MODE=false
 WITH_PERSONAL=true
 PROFILE="default"
+PERSONAL_REF=""                 # 空 = 个人层跟着规则本体；hybrid 档指向本机规则库
 SELECTION_ARG=""
 
 while [ $# -gt 0 ]; do
@@ -96,6 +98,19 @@ case "$PROFILE" in
     fi
     WITH_PERSONAL=false
     ;;
+  hybrid)
+    if [ "$LINK_MODE" = true ]; then
+      echo "❌ --profile hybrid 与 --link 矛盾：混合档要求规则副本进仓库（只有 personal/ 走外链）"
+      exit 1
+    fi
+    if [ "$WITH_PERSONAL" = false ]; then
+      echo "❌ --profile hybrid 与 --no-personal 矛盾：混合档就是要把个人层接上（本机外链）"
+      exit 1
+    fi
+    # 副本里不含 personal/，改用本机规则库的 personal/（绝对路径）
+    WITH_PERSONAL=false
+    PERSONAL_REF="$VIBE_HOME/personal"
+    ;;
   personal)
     if [ "$WITH_PERSONAL" = false ]; then
       echo "❌ --profile personal 与 --no-personal 矛盾：个人档就是要把个人层带上"
@@ -104,7 +119,7 @@ case "$PROFILE" in
     LINK_MODE=true
     ;;
   *)
-    echo "❌ --profile 只支持 team 或 personal，收到：$PROFILE"
+    echo "❌ --profile 只支持 team / hybrid / personal，收到：$PROFILE"
     exit 1
     ;;
 esac
@@ -218,6 +233,7 @@ PERSONAL_NOTE="（有就读）"
 
 case "$PROFILE" in
   team)     echo "🧭 策略档位：team（团队共享：副本进仓库 + 不含 personal/）" ;;
+  hybrid)   echo "🧭 策略档位：hybrid（副本进仓库；personal/ 不进仓库，只在本机外链）" ;;
   personal) echo "🧭 策略档位：personal（个人自用：外链模式，规则不进仓库）" ;;
   *)        echo "🧭 策略档位：default（未指定，按上面选的模式走）" ;;
 esac
@@ -285,7 +301,11 @@ if [ "$MODE" = "embedded" ]; then
   rsync "${RSYNC_ARGS[@]}" "$VIBE_HOME/" "$RULES_DIR/"
   if [ "$WITH_PERSONAL" = false ]; then
     rm -rf -- "$RULES_DIR/personal"
-    PERSONAL_NOTE="（副本里未包含，跳过）"
+    if [ -n "$PERSONAL_REF" ]; then
+      PERSONAL_NOTE="（**本机外链**，不进仓库、换机器读不到）"
+    else
+      PERSONAL_NOTE="（副本里未包含，跳过）"
+    fi
   fi
   echo "   ✅ 规则本体（global / languages / skills）"
 
@@ -344,8 +364,14 @@ else
   RULES_REF="$VIBE_HOME"
   NOTES_REF="$VIBE_HOME/projects/$SLUG/README.md"
 fi
+# hybrid 档：个人层走本机绝对路径；其余情况个人层跟着规则本体
+if [ -z "$PERSONAL_REF" ]; then
+  PERSONAL_REF="$RULES_REF/personal"
+fi
 
-if [ "$MODE" = "embedded" ]; then
+if [ "$MODE" = "embedded" ] && [ -n "$PERSONAL_REF" ]; then
+  BLOCK_INTRO="开始任何工作前，按下面的顺序读（**混合档**：规则副本在项目内、路径相对项目根；第 3 条个人层在本机绝对路径，不存在就跳过）："
+elif [ "$MODE" = "embedded" ]; then
   BLOCK_INTRO="开始任何工作前，按下面的顺序读（**自包含副本**，路径相对项目根，不需要访问项目外的任何文件）："
 else
   BLOCK_INTRO="开始任何工作前，按下面的顺序读（**外链模式**，路径是本机规则库的绝对路径，不存在就跳过）："
@@ -359,11 +385,11 @@ $BLOCK_INTRO
 
 1. **规则库入口**：\`$RULES_REF/README.md\` —— 六条铁律 + 索引
 2. **全局踩坑库（最新 10 条）**：\`$RULES_REF/global/anti-patterns.md\`
-3. **个人偏好与记忆**：\`$RULES_REF/personal/preferences.md\`、\`$RULES_REF/personal/memory.md\`$PERSONAL_NOTE
+3. **个人偏好与记忆**：\`$PERSONAL_REF/preferences.md\`、\`$PERSONAL_REF/memory.md\`$PERSONAL_NOTE
 4. **本项目专属沉淀**：\`$NOTES_REF\` —— 最具体，冲突时优先
 5. **技术栈规范**：\`$RULES_REF/languages/<tech>.md\`（按本项目实际栈读，不要全读）
 6. **可复用工作流**：\`$RULES_REF/skills/README.md\`，再按当前任务挑一个 \`$RULES_REF/skills/<name>/SKILL.md\`
-7. **本项目文档约定**：设计文档 → \`docs/specs/YYYY-MM-DD-<topic>.md\`，实现计划 → \`docs/plans/YYYY-MM-DD-<feature>.md\`（写法见 skills/brainstorming、skills/writing-plans）
+7. **本项目文档约定**：设计文档 → \`docs/specs/YYYY-MM-DD-<topic>.md\`，实现计划 → \`docs/plans/YYYY-MM-DD-<feature>.md\`；每份文档开头写 \`> status: draft|active|done|abandoned · updated: YYYY-MM-DD\`（\`done\` 的不用重读全文；汇总见规则库 scripts/docs-status.sh）
 
 > 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
@@ -565,9 +591,15 @@ if [ -f "$PROJECT_ROOT/.gitignore" ] && \
    grep -qE '^[[:space:]]*/?\.vibe-rules/?[[:space:]]*$' "$PROJECT_ROOT/.gitignore"; then
   IGNORES_VIBE=true
 fi
-if [ "$PROFILE" = "team" ] && [ "$IGNORES_VIBE" = true ]; then
-  echo "⚠️  团队档提醒：本项目 .gitignore 忽略了 .vibe-rules/，副本不会进仓库，"
-  echo "   队友 / 云端 agent / CI 都读不到——这正是团队档要拦住的情况。"
+PROFILE_LABEL=""
+if [ "$PROFILE" = "team" ]; then
+  PROFILE_LABEL="团队档"
+elif [ "$PROFILE" = "hybrid" ]; then
+  PROFILE_LABEL="混合档"
+fi
+if [ -n "$PROFILE_LABEL" ] && [ "$IGNORES_VIBE" = true ]; then
+  echo "⚠️  ${PROFILE_LABEL}提醒：本项目 .gitignore 忽略了 .vibe-rules/，副本不会进仓库，"
+  echo "   队友 / 云端 agent / CI 都读不到——这正是这个档位要拦住的情况。"
   echo "   修：把该条从 .gitignore 删掉（或加一行 !.vibe-rules/ 例外）；"
   echo "   如果你就是不想让规则进仓库，改用 --profile personal 重装。"
   echo ""
@@ -583,6 +615,8 @@ if [ "$MODE" = "embedded" ]; then
   echo "   - 项目专属笔记在 .vibe-rules/project/README.md，也建议提交；重装/更新都不会覆盖它"
   if [ "$WITH_PERSONAL" = true ]; then
     echo "   - 副本里含 personal/（个人偏好与记忆）。不想带进仓库：用 --no-personal 装，或把 .vibe-rules/personal/ 加进 .gitignore"
+  elif [ -n "$PERSONAL_REF" ] && [ "$PERSONAL_REF" != "$RULES_REF/personal" ]; then
+    echo "   - 个人层走本机外链：$PERSONAL_REF/（不会进仓库；换机器想继续用，记得在那边也放一份）"
   fi
   echo "   - 规则库以后改了：$VIBE_HOME/scripts/update.sh $PROJECT_ROOT"
 else

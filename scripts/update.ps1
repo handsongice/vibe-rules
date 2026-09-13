@@ -78,7 +78,7 @@ foreach ($line in ((Get-Content $evidence -Raw) -split "`r?`n")) {
 $installParams = @{ ProjectRoot = $ProjectRoot }
 # 显式传了 -Link / -NoPersonal 就按用户的来，不再沿用档位
 $explicitOverride = $Link -or $NoPersonal
-if (-not $explicitOverride -and ($profileFromEvidence -eq "team" -or $profileFromEvidence -eq "personal")) {
+if (-not $explicitOverride -and ($profileFromEvidence -eq "team" -or $profileFromEvidence -eq "hybrid" -or $profileFromEvidence -eq "personal")) {
     # 档位是装的时候定的策略，更新时原样沿用
     $installParams["Profile"] = $profileFromEvidence
 } else {

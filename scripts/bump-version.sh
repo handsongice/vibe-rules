@@ -31,12 +31,12 @@ if [ -z "$NEW" ]; then
 fi
 case "$NEW" in
   [0-9]*.[0-9]*.[0-9]*) ;;
-  *) echo "❌ 不是 semver：$NEW（应为 1.2.3 形式）" >&2; exit 2 ;;
+  *) echo "❌ 不是 semver：${NEW}（应为 1.2.3 形式）" >&2; exit 2 ;;
 esac
 
 OLD="$(cat VERSION | tr -d '[:space:]')"
 if [ "$OLD" = "$NEW" ]; then
-  echo "ℹ️  版本没变（仍是 $OLD），只做同步检查"
+  echo "ℹ️  版本没变（仍是 ${OLD}），只做同步检查"
 fi
 
 echo "$NEW" > VERSION

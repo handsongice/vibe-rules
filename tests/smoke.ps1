@@ -331,6 +331,37 @@ try {
     Check "覆盖后档位变 team" { $ppEvidence.Contains("profile=team") }
     Check "覆盖后 verify 通过" { (Run-Script $Verify @($PP)) -eq 0 }
 
+    # hybrid 档：副本进仓库（不含 personal\），个人层走本机外链
+    $PH = Join-Path $TmpRoot "proj-hybrid"
+    New-Item -ItemType Directory -Path $PH -Force | Out-Null
+    $code = Run-Script $Install @($PH, "-Profile", "hybrid", "-AgentNums", "1", "-Yes")
+    Check "install -Profile hybrid 退出码 0" { $code -eq 0 }
+    $hyEvidence = Raw (Join-Path $PH ".vibe-rules/installed")
+    Check "hybrid：证据文件 profile=hybrid" { $hyEvidence.Contains("profile=hybrid") }
+    Check "hybrid：副本进仓库（mode=embedded）" { $hyEvidence.Contains("mode=embedded") }
+    Refute "hybrid：副本不含 personal\" { Test-Path (Join-Path $PH ".vibe-rules/personal") }
+    Check "hybrid：引用块标注个人层本机外链" { (Raw (Join-Path $PH "AGENTS.md")).Contains("本机外链") }
+    Check "hybrid：AGENTS.md 第 3 条指向本机 personal\" { (Raw (Join-Path $PH "AGENTS.md")).Contains(((Join-Path $R1 "personal") -replace '\\', '/')) }
+    Check "hybrid：verify 通过" { (Run-Script $Verify @($PH)) -eq 0 }
+    $c4 = Run-Script $Install @((Join-Path $TmpRoot "proj-h1"), "-Profile", "hybrid", "-Link", "-Yes")
+    Check "-Profile hybrid 与 -Link 冲突被拒绝" { $c4 -ne 0 }
+    $c5 = Run-Script $Install @((Join-Path $TmpRoot "proj-h2"), "-Profile", "hybrid", "-NoPersonal", "-Yes")
+    Check "-Profile hybrid 与 -NoPersonal 冲突被拒绝" { $c5 -ne 0 }
+
+    # update 要沿用 hybrid 档（不能把 personal\ 带进副本）
+    $code = Run-Script $Update @($PH)
+    Check "hybrid：update 退出码 0" { $code -eq 0 }
+    Check "hybrid：update 沿用档位（profile=hybrid）" { (Raw (Join-Path $PH ".vibe-rules/installed")).Contains("profile=hybrid") }
+    Refute "hybrid：update 后仍然不含 personal\" { Test-Path (Join-Path $PH ".vibe-rules/personal") }
+    Check "hybrid：update 后引用块仍指向本机 personal\" { (Raw (Join-Path $PH "AGENTS.md")).Contains(((Join-Path $R1 "personal") -replace '\\', '/')) }
+
+    # 混合档同样要求副本能进仓库：.gitignore 排除掉 = 队友/云端读不到
+    Add-Content -Path (Join-Path $PH ".gitignore") ".vibe-rules/`n"
+    $hyOut = Run-ScriptOut $Install @($PH, "-Profile", "hybrid", "-AgentNums", "1", "-Yes")
+    Check "hybrid：装的时候提醒副本被 .gitignore 排除" { $hyOut.Contains("混合档提醒") }
+    Refute "hybrid：.gitignore 忽略副本 → verify 报错" { (Run-Script $Verify @($PH)) -eq 0 }
+    Remove-Item -LiteralPath (Join-Path $PH ".gitignore") -Force
+
     Write-Host "== 14. uninstall =="
     $code = Run-Script $Uninst @($P1)
     Check "uninstall 退出码 0" { $code -eq 0 }

@@ -67,6 +67,12 @@ else
   bad "证据文件 mode 值无效：${MODE}（应为 embedded 或 link）"
 fi
 
+# 策略档位提前读出来：第 2 节的个人层说明和第 2b 节的档位校验都要用
+PROFILE="$(sed -n 's/^profile=//p' "$EVIDENCE" | head -n 1)"
+if [ -z "$PROFILE" ]; then
+  PROFILE="default"   # 兼容旧版证据文件（没有 profile 字段）
+fi
+
 # ---------- 2. 规则本体 ----------
 if [ "$MODE" = "embedded" ]; then
   if [ -f "$PROJECT_ROOT/.vibe-rules/README.md" ]; then
@@ -96,6 +102,8 @@ if [ "$MODE" = "embedded" ]; then
 
   if [ -f "$PROJECT_ROOT/.vibe-rules/personal/preferences.md" ]; then
     ok "副本含 personal/（个人偏好与记忆）"
+  elif [ "$PROFILE" = "hybrid" ]; then
+    ok "副本不含 personal/（混合档：个人层走本机外链，符合预期）"
   else
     warn "副本不含 personal/（安装时用了 --no-personal，属正常）"
   fi
@@ -122,11 +130,6 @@ else
 fi
 
 # ---------- 2b. 策略档位（本地/团队策略有没有真的落实） ----------
-PROFILE="$(sed -n 's/^profile=//p' "$EVIDENCE" | head -n 1)"
-if [ -z "$PROFILE" ]; then
-  PROFILE="default"   # 兼容旧版证据文件（没有 profile 字段）
-fi
-
 IGNORES_VIBE=false
 if [ -f ".gitignore" ] && grep -qE '^[[:space:]]*/?\.vibe-rules/?[[:space:]]*$' .gitignore; then
   IGNORES_VIBE=true
@@ -152,6 +155,32 @@ case "$PROFILE" in
       ok "团队档：.vibe-rules/ 没有被 .gitignore 排除"
     fi
     ;;
+  hybrid)
+    ok "策略档位：hybrid（副本进仓库 + personal/ 本机外链）"
+    if [ "$MODE" != "embedded" ]; then
+      bad "混合档要求自包含副本模式，实际是 ${MODE}（重跑 install.sh --profile hybrid）"
+    fi
+    if [ -d "$PROJECT_ROOT/.vibe-rules/personal" ]; then
+      bad "混合档副本里不该有 personal/（个人偏好会跟着进仓库；重跑 install.sh --profile hybrid）"
+    else
+      ok "混合档：副本不含 personal/"
+    fi
+    if [ "$IGNORES_VIBE" = true ]; then
+      bad "混合档：.gitignore 忽略了 .vibe-rules/，副本进不了仓库（队友/云端/CI 读不到）"
+    else
+      ok "混合档：.vibe-rules/ 没有被 .gitignore 排除"
+    fi
+    if [ -n "$RULES_HOME" ] && [ -d "$RULES_HOME/personal" ]; then
+      ok "混合档：本机个人层存在（$RULES_HOME/personal）"
+    else
+      warn "混合档：本机规则库里没有 personal/（换台机器就读不到个人偏好）"
+    fi
+    if [ -f "$PROJECT_ROOT/AGENTS.md" ] && grep -qF "$RULES_HOME/personal" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null; then
+      ok "混合档：AGENTS.md 第 3 条指向本机 personal/"
+    else
+      bad "混合档：AGENTS.md 没指向本机 personal/（重跑 install.sh --profile hybrid）"
+    fi
+    ;;
   personal)
     ok "策略档位：personal（个人自用）"
     if [ "$MODE" != "link" ]; then
@@ -164,7 +193,7 @@ case "$PROFILE" in
     fi
     ;;
   *)
-    bad "证据文件 profile 值无效：${PROFILE}（应为 team / personal / default）"
+    bad "证据文件 profile 值无效：${PROFILE}（应为 team / hybrid / personal / default）"
     ;;
 esac
 

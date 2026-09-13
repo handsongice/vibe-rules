@@ -16,6 +16,8 @@
 6. **可复用工作流**：`skills/README.md`，再按当前任务挑一个 `skills/<name>/SKILL.md`
 7. **本项目文档约定**：设计文档写进项目根 `docs/specs/YYYY-MM-DD-<topic>.md`，实现计划写进 `docs/plans/YYYY-MM-DD-<feature>.md`
    （两个目录的 `README.md` 里有完整结构与自审清单；写法对应 `skills/brainstorming`、`skills/writing-plans`）
+   每份文档开头（标题下面一行）写状态行 `> status: draft|active|done|abandoned · updated: YYYY-MM-DD`——
+   `done` 的不用重读全文；查状态 / 找过期 / 归档用规则库的 `scripts/docs-status.sh`
 
 按需再读的通用规范：`global/coding-principles.md`（四原则 + 决策梯子）、`global/writing-for-agents.md`（怎么给 agent 写文档）、`global/git-workflow.md`、`global/testing.md`、`global/security.md`。
 

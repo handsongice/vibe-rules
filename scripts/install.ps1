@@ -1,7 +1,7 @@
 # install.ps1 —— 在你的开发项目里接入 vibe-rules（Windows PowerShell 版）
 #
 # 用法：
-#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Profile team|personal] [-Copy] [-Yes]
+#   pwsh scripts\install.ps1 [项目路径] [-All] [-AgentNums 1,3,5] [-Link] [-NoPersonal] [-Profile team|hybrid|personal] [-Copy] [-Yes]
 #
 # 选项：
 #   -All            安装所有 agent 入口
@@ -9,6 +9,7 @@
 #   -Link           外链模式：规则本体留在本机规则库，引用块用绝对路径（默认是自包含副本模式）
 #   -NoPersonal     副本里不含 personal\（个人偏好与记忆不进项目仓库）
 #   -Profile team      团队档：强制自包含副本 + 不含 personal\，并要求副本真的能进仓库
+#   -Profile hybrid    混合档：副本进仓库，但 personal\ 不进仓库、只在本机外链
 #   -Profile personal  个人档：强制外链模式（规则不落进仓库），个人层照常带上
 #   -Copy           入口用真实文件复制代替 symlink（无 symlink 权限时的默认降级也一样）
 #   -Yes            非交互模式（配合 -All / -AgentNums）
@@ -127,6 +128,7 @@ if ($SelectedNums.Count -eq 0) {
 }
 
 # ---------- 策略档位（本地/团队策略在脚本层收口，不靠人记） ----------
+$PersonalRef = ""   # 空 = 个人层跟着规则本体；hybrid 档指向本机规则库
 switch ($Profile) {
     "default" { }
     "team" {
@@ -136,6 +138,19 @@ switch ($Profile) {
         }
         $NoPersonal = $true
     }
+    "hybrid" {
+        if ($Link) {
+            Write-Host "❌ -Profile hybrid 与 -Link 矛盾：混合档要求规则副本进仓库（只有 personal 走外链）"
+            exit 1
+        }
+        if ($NoPersonal) {
+            Write-Host "❌ -Profile hybrid 与 -NoPersonal 矛盾：混合档就是要把个人层接上（本机外链）"
+            exit 1
+        }
+        # 副本里不含 personal\，改用本机规则库的 personal\（绝对路径）
+        $NoPersonal = $true
+        $PersonalRef = (Join-Path $VibeHome "personal") -replace '\\', '/'
+    }
     "personal" {
         if ($NoPersonal) {
             Write-Host "❌ -Profile personal 与 -NoPersonal 矛盾：个人档就是要把个人层带上"
@@ -144,7 +159,7 @@ switch ($Profile) {
         $Link = $true
     }
     default {
-        Write-Host "❌ -Profile 只支持 team 或 personal，收到：$Profile"
+        Write-Host "❌ -Profile 只支持 team / hybrid / personal，收到：$Profile"
         exit 1
     }
 }
@@ -153,6 +168,7 @@ switch ($Profile) {
 if ($Link) { $Mode = "link" } else { $Mode = "embedded" }
 switch ($Profile) {
     "team"     { Write-Host "🧭 策略档位：team（团队共享：副本进仓库 + 不含 personal）" }
+    "hybrid"   { Write-Host "🧭 策略档位：hybrid（副本进仓库；personal 不进仓库，只在本机外链）" }
     "personal" { Write-Host "🧭 策略档位：personal（个人自用：外链模式，规则不进仓库）" }
     default    { Write-Host "🧭 策略档位：default（未指定，按上面选的模式走）" }
 }
@@ -288,7 +304,11 @@ if ($Mode -eq "embedded") {
 # ---------- 引用块 ----------
 $BeginMarker = "<!-- vibe-rules:begin"
 $EndMarker = "<!-- vibe-rules:end -->"
-if ($Mode -eq "embedded") {
+if ($Mode -eq "embedded" -and $PersonalRef) {
+    $rulesRef = ".vibe-rules"
+    $notesRef = ".vibe-rules/project/README.md"
+    $blockIntro = "开始任何工作前，按下面的顺序读（**混合档**：规则副本在项目内、路径相对项目根；第 3 条个人层在本机绝对路径，不存在就跳过）："
+} elseif ($Mode -eq "embedded") {
     $rulesRef = ".vibe-rules"
     $notesRef = ".vibe-rules/project/README.md"
     $blockIntro = "开始任何工作前，按下面的顺序读（**自包含副本**，路径相对项目根，不需要访问项目外的任何文件）："
@@ -297,7 +317,14 @@ if ($Mode -eq "embedded") {
     $notesRef = "$rulesRef/projects/$Slug/README.md"
     $blockIntro = "开始任何工作前，按下面的顺序读（**外链模式**，路径是本机规则库的绝对路径，不存在就跳过）："
 }
-if ($NoPersonal) { $PersonalNote = "（副本里未包含，跳过）" }
+if ($NoPersonal) {
+    if ($PersonalRef) {
+        $PersonalNote = "（**本机外链**，不进仓库、换机器读不到）"
+    } else {
+        $PersonalNote = "（副本里未包含，跳过）"
+    }
+}
+if (-not $PersonalRef) { $PersonalRef = "$rulesRef/personal" }
 $BlockTemplate = @'
 <!-- vibe-rules:begin（本块由 vibe-rules 自动维护，勿手改；重跑 install.ps1 / update.ps1 即可刷新） -->
 ## 全局规则库（vibe-rules）
@@ -306,16 +333,16 @@ $BlockTemplate = @'
 
 1. **规则库入口**：`@RULES_REF@/README.md` —— 六条铁律 + 索引
 2. **全局踩坑库（最新 10 条）**：`@RULES_REF@/global/anti-patterns.md`
-3. **个人偏好与记忆**：`@RULES_REF@/personal/preferences.md`、`@RULES_REF@/personal/memory.md`@PERSONAL_NOTE@
+3. **个人偏好与记忆**：`@PERSONAL_REF@/preferences.md`、`@PERSONAL_REF@/memory.md`@PERSONAL_NOTE@
 4. **本项目专属沉淀**：`@NOTES_REF@` —— 最具体，冲突时优先
 5. **技术栈规范**：`@RULES_REF@/languages/<tech>.md`（按本项目实际栈读，不要全读）
 6. **可复用工作流**：`@RULES_REF@/skills/README.md`，再按当前任务挑一个 `@RULES_REF@/skills/<name>/SKILL.md`
-7. **本项目文档约定**：设计文档 → `docs/specs/YYYY-MM-DD-<topic>.md`，实现计划 → `docs/plans/YYYY-MM-DD-<feature>.md`（写法见 skills/brainstorming、skills/writing-plans）
+7. **本项目文档约定**：设计文档 → `docs/specs/YYYY-MM-DD-<topic>.md`，实现计划 → `docs/plans/YYYY-MM-DD-<feature>.md`；每份文档开头写 `> status: draft|active|done|abandoned · updated: YYYY-MM-DD`（`done` 的不用重读全文；汇总见规则库 scripts/docs-status.sh）
 
 > 规则优先级：项目内约定（AGENTS.md + project/README.md）> 个人偏好 > 全局规范。冲突时以更具体的一层为准，并在回复里指出冲突。
 <!-- vibe-rules:end -->
 '@
-$Block = $BlockTemplate.Replace('@INTRO@', $blockIntro).Replace('@RULES_REF@', $rulesRef).Replace('@NOTES_REF@', $notesRef).Replace('@PERSONAL_NOTE@', $PersonalNote)
+$Block = $BlockTemplate.Replace('@INTRO@', $blockIntro).Replace('@RULES_REF@', $rulesRef).Replace('@NOTES_REF@', $notesRef).Replace('@PERSONAL_REF@', $PersonalRef).Replace('@PERSONAL_NOTE@', $PersonalNote)
 
 function Repair-LegacyTemplate {
     param([string]$File)
@@ -524,6 +551,8 @@ if ($Mode -eq "embedded") {
     Write-Host "   - 项目专属笔记在 .vibe-rules\project\README.md，也建议提交；重装/更新都不会覆盖它"
     if (-not $NoPersonal) {
         Write-Host "   - 副本里含 personal\（个人偏好与记忆）。不想带进仓库：用 -NoPersonal 装，或把 .vibe-rules\personal\ 加进 .gitignore"
+    } elseif ($PersonalRef -and $PersonalRef -ne "$rulesRef/personal") {
+        Write-Host "   - 个人层走本机外链：$PersonalRef（不会进仓库；换机器想继续用，记得在那边也放一份）"
     }
     Write-Host "   - 规则库以后改了：pwsh $VibeHome\scripts\update.ps1 $ProjectRoot"
 } else {
@@ -537,10 +566,13 @@ $gitignorePath = Join-Path $ProjectRoot ".gitignore"
 if (Test-Path $gitignorePath) {
     if (Get-Content $gitignorePath | Where-Object { $_ -match '^\s*/?\.vibe-rules/?\s*$' }) { $ignoresVibe = $true }
 }
-if ($Profile -eq "team" -and $ignoresVibe) {
+$profileLabel = ""
+if ($Profile -eq "team") { $profileLabel = "团队档" }
+elseif ($Profile -eq "hybrid") { $profileLabel = "混合档" }
+if ($profileLabel -and $ignoresVibe) {
     Write-Host ""
-    Write-Host "⚠️  团队档提醒：本项目 .gitignore 忽略了 .vibe-rules\，副本不会进仓库，"
-    Write-Host "   队友 / 云端 agent / CI 都读不到——这正是团队档要拦住的情况。"
+    Write-Host "⚠️  ${profileLabel}提醒：本项目 .gitignore 忽略了 .vibe-rules\，副本不会进仓库，"
+    Write-Host "   队友 / 云端 agent / CI 都读不到——这正是这个档位要拦住的情况。"
     Write-Host "   修：把该条从 .gitignore 删掉（或加一行 !.vibe-rules/ 例外）；"
     Write-Host "   如果你就是不想让规则进仓库，改用 -Profile personal 重装。"
 }
